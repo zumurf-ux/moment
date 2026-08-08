@@ -1,6 +1,6 @@
 export const demoData = {
   editions: [{
-    id:"daily-2026-08-06-v1", type:"daily", publishDate:"2026-08-08", sourceDate:"2026-08-07", version:3, status:"PUBLISHED",
+    id:"daily-2026-08-06-v1", type:"daily", publishDate:"2026-08-08", sourceDate:"2026-08-07", visibleAt:"2026-08-08T05:00:00+09:00", version:3, status:"PUBLISHED",
     headline:"8월 7일 가장 영향도가 큰 6가지 사실", reviewedAt:"2026-08-08T20:10:00+09:00", sourceCount:104,
     sourceWindowStart:"2026-08-07T00:00:00+09:00", sourceWindowEnd:"2026-08-07T23:59:59+09:00",
     selectionModel:"일간 영향도 분석 v2", selectionFactors:"전날 발행 확인·국민 영향도 30%·안전성 25%·최신성 25%·출처 검증도 20%",
