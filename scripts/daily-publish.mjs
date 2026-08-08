@@ -139,8 +139,11 @@ const prompt = `당신은 한국어 일간 브리핑 '잠시'의 사실검증 �
 4. 같은 사건을 다룬 독립 언론사 기사 2개 이상이 입력에 있을 때만 선정한다. sourceNames와 sourceUrls에 교차 확인한 출처를 2개 이상 기록한다.
 5. 8개를 먼저 분야별 영향도 순으로 비교한 뒤, 국민 영향도 30%·안전성 25%·최신성 25%·출처 검증도 20%로 전체 순위를 정한다. 1번이 그날의 메인 이슈다.
 6. 정치에서는 좌우 평가, 정당 유불리, 감정적 표현, 전망을 쓰지 않는다. 의결·발표·수치·일정처럼 확인된 사실만 쓴다.
-7. 제목은 구체적인 주어와 확정된 결과를 담고, 요약은 휴대전화 한 페이지에 맞게 2문장·120자 이내로 쓴다.
-8. 입력에 없는 사실이나 URL을 만들지 않는다.
+7. 인물이나 단체의 비난·공방·주장·평가만 있는 기사는 선정하지 않는다. '빌런·조롱·전격·실책·책임론·강력히' 같은 감정적 단어를 제목과 요약에 쓰지 않는다.
+8. 경제는 물가·금리·고용·무역·산업·가계처럼 확인된 지표나 시행된 정책을 고른다. 정치인의 경제 인사 비난이나 경질 요구를 경제 이슈로 분류하지 않는다.
+9. 지역 행사나 단순 계획 착수보다 전국 단위 제도 변화, 다수 국민의 안전·생활·경제에 영향을 준 확정 사실을 우선한다.
+10. 제목은 구체적인 주어와 확정된 결과를 담고, 요약은 휴대전화 한 페이지에 맞게 2문장·120자 이내로 쓴다.
+11. 입력에 없는 사실이나 URL을 만들지 않는다.
 
 JSON만 출력한다.
 {"items":[{"category":"지정된 8개 분야 중 하나","title":"구체적 사실 제목","summary":"120자 이내 사실 요약","sourceName":"대표 언론사","sourceNames":["교차확인 언론사1","교차확인 언론사2"],"sourceUrls":["입력 URL1","입력 URL2"],"score":0,"reason":"선정 근거","factors":{"freshness":0,"impact":0,"safety":0,"verification":0}}]}
@@ -149,6 +152,7 @@ JSON만 출력한다.
 
 const requiredCategories = new Set(SECTIONS.map(([section]) => section));
 const inputUrls = new Set(articles.map(article => article.url));
+const neutralityBlocklist = /빌런|조롱|전격|실책|책임론|강력히|망언|폭언|굴욕|참사 정권|무능 정권/;
 
 function validateAnalysis(value) {
   const errors = [];
@@ -166,6 +170,10 @@ function validateAnalysis(value) {
     if (!Array.isArray(item.sourceUrls) || item.sourceUrls.length < 2 || item.sourceUrls.some(url => !inputUrls.has(url))) errors.push(`${item.category} 교차검증 URL 오류`);
     if (!Array.isArray(item.sourceNames) || new Set(item.sourceNames).size < 2) errors.push(`${item.category} 독립 언론사 교차검증 부족`);
     if (!item.title || !item.summary || item.summary.length > 120) errors.push(`${item.category} 제목 또는 요약 형식 오류`);
+    if (neutralityBlocklist.test(`${item.title} ${item.summary}`)) errors.push(`${item.category} 감정·논평 표현 포함`);
+    if (item.category === '경제' && /경질|사퇴|해임|비난|공방|의원.*요구/.test(`${item.title} ${item.summary}`)) {
+      errors.push('경제 분야에 정치권 비난·인사 요구가 포함됨');
+    }
   }
   for (const category of requiredCategories) if (!chosenCategories.has(category)) errors.push(`분야 누락: ${category}`);
   return [...new Set(errors)];
@@ -174,7 +182,7 @@ function validateAnalysis(value) {
 let analysis;
 let validationErrors = [];
 for (let attempt = 1; attempt <= 3; attempt += 1) {
-  const correction = attempt === 1 ? '' : `\n\n이전 응답은 다음 검증에 실패했다: ${validationErrors.join(' / ')}. 기존 JSON을 그대로 반복하지 말고, 지정된 8개 분야를 정확히 한 개씩 포함한 8개 결과로 다시 작성하라.`;
+  const correction = attempt === 1 ? '' : `\n\n이전 응답은 다음 검증에 실패했다: ${validationErrors.join(' / ')}. 기존 JSON을 그대로 반복하지 말고, 지정된 8개 분야를 정확히 한 개씩 포함한 8개 결과로 다시 작성하고, 발언·비난·공방이 아니라 전국적 영향이 큰 확정 사실을 고르라.`;
   const aiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
