@@ -8,14 +8,14 @@ for (const [name, value] of Object.entries({ FIREBASE_API_KEY, FIREBASE_ADMIN_EM
 }
 
 const SECTIONS = [
-  ['정치', '정치 국회 정부 정책'],
-  ['경제', '경제 물가 금융 산업'],
-  ['사회', '사회 사건 법원 노동 교육'],
-  ['국제', '국제 외교 전쟁 무역'],
-  ['생활·안전', '날씨 재난 보건 교통 주거'],
-  ['과학·기술', '과학 기술 AI 우주 반도체'],
-  ['문화·예술', '문화 예술 영화 음악 출판 공연'],
-  ['스포츠', '스포츠 야구 축구 올림픽'],
+  ['정치', ['정치', '국회', '정부 정책']],
+  ['경제', ['경제', '물가 금리', '산업 수출']],
+  ['사회', ['사회', '사건 사고', '노동 교육']],
+  ['국제', ['국제', '외교', '세계']],
+  ['생활·안전', ['날씨 재난', '보건 의료', '교통 주거']],
+  ['과학·기술', ['과학 기술', 'AI 반도체', '우주 연구']],
+  ['문화·예술', ['문화 예술', '영화 음악', '출판 공연']],
+  ['스포츠', ['스포츠', '야구 축구', '올림픽']],
 ];
 
 const kstDate = (date = new Date()) => new Intl.DateTimeFormat('en-CA', {
@@ -30,7 +30,7 @@ const sourceDate = process.env.SOURCE_DATE || addDays(kstDate(), -1);
 const publishDate = addDays(sourceDate, 1);
 const visibleAt = `${publishDate}T05:00:00+09:00`;
 const feedUrl = query => `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=ko&gl=KR&ceid=KR:ko`;
-const feeds = SECTIONS.map(([section, query]) => [section, feedUrl(query)]);
+const feeds = SECTIONS.flatMap(([section, queries]) => queries.map(query => [section, feedUrl(query)]));
 
 const decodeXml = text => text
   .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
