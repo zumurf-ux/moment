@@ -2,7 +2,7 @@ name: 매일 AI 이슈 분석 및 오전 5시 발행
 
 on:
   schedule:
-    - cron: '20 19 * * *'
+    - cron: '50 18 * * *'
   workflow_dispatch:
     inputs:
       source_date:
