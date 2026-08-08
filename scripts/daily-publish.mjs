@@ -226,7 +226,7 @@ await Promise.all(analysis.items.map((item, index) => setDocument('candidates', 
 await setDocument('auditLogs', `auto-publish-${publishDate}`, {
   action: 'daily.auto_published', entityType: 'editions', entityId: editionId,
   actorEmail: 'github-actions@jamsi', sourceDate, publishDate, visibleAt, model: MODEL,
-  categoryCoverage: [...requiredCategories], representativeSourceCount: representativeSources.size,
+  categoryCoverage: [...requiredCategories], representativeSourceCount: new Set(analysis.items.map(item => item.sourceName)).size,
   createdAt: new Date().toISOString(),
 });
 console.log(`${sourceDate} 전 분야 8개 이슈 분석 완료 → ${visibleAt} 공개 예약`);
