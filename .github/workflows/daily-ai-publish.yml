@@ -12,7 +12,6 @@ on:
 
 permissions:
   contents: read
-  models: read
 
 concurrency:
   group: daily-ai-publish
@@ -29,15 +28,17 @@ jobs:
         env:
           FIREBASE_ADMIN_EMAIL: ${{ secrets.FIREBASE_ADMIN_EMAIL }}
           FIREBASE_ADMIN_PASSWORD: ${{ secrets.FIREBASE_ADMIN_PASSWORD }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           test -n "$FIREBASE_ADMIN_EMAIL" || (echo "FIREBASE_ADMIN_EMAIL 비밀값이 필요합니다." && exit 1)
           test -n "$FIREBASE_ADMIN_PASSWORD" || (echo "FIREBASE_ADMIN_PASSWORD 비밀값이 필요합니다." && exit 1)
+          test -n "$GEMINI_API_KEY" || (echo "GEMINI_API_KEY 비밀값이 필요합니다." && exit 1)
       - name: 전날 기사 수집·AI 분석·파이어베이스 예약 업로드
         env:
-          GITHUB_TOKEN: ${{ github.token }}
           FIREBASE_API_KEY: AIzaSyBRWlA5RmVNo83hm5QdMwVTieA7RMeQKnk
           FIREBASE_ADMIN_EMAIL: ${{ secrets.FIREBASE_ADMIN_EMAIL }}
           FIREBASE_ADMIN_PASSWORD: ${{ secrets.FIREBASE_ADMIN_PASSWORD }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           SOURCE_DATE: ${{ inputs.source_date }}
-          AI_MODEL: openai/gpt-4.1
+          AI_MODEL: gemini-3.1-flash-lite
         run: node scripts/daily-publish.mjs
