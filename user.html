@@ -40,7 +40,7 @@
 
     function render(edition) {
       document.querySelector('#userHeadline').textContent = edition.headline;
-      document.querySelector('#editionDateLine').textContent = `${edition.sourceDate.replaceAll('-', '.')} 이슈 · ${edition.publishDate.replaceAll('-', '.')} 오전 5시 발행`;
+      document.querySelector('#editionDateLine').textContent = `${edition.publishDate.replaceAll('-', '.')} · 매일 오전 5시 발행`;
       document.querySelector('#userIssues').innerHTML = edition.items.map((item, index) => `
         <article>
           <span class="eyebrow">${String(index + 1).padStart(2, '0')} · ${escapeHtml(item.category)}</span>
