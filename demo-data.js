@@ -1,5 +1,5 @@
 export const demoData = {
-  editions: [{ id:"daily-2026-08-06-v1", type:"daily", publishDate:"2026-08-06", version:1, status:"PUBLISHED", headline:"오늘, 이 정도만 알아두세요", reviewedAt:"2026-08-06T05:48:00+09:00", sourceCount:24, audioScript:"오늘 꼭 필요한 여섯 가지 소식을 전해드립니다.", audioUrl:"", items:[
+  editions: [{ id:"daily-2026-08-06-v1", type:"daily", publishDate:"2026-08-06", version:1, status:"PUBLISHED", headline:"오늘, 이 정도만 알아두세요", reviewedAt:"2026-08-06T05:48:00+09:00", sourceCount:24, items:[
     {order:1,category:"경제",title:"환율 변동성이 다시 커졌습니다",summary:"수입 원가와 해외 결제 비용에 영향을 줄 수 있어 주요 지표를 함께 확인해야 합니다."},
     {order:2,category:"사회",title:"폭염 대응 단계가 확대됐습니다",summary:"낮 시간 야외 활동과 이동 계획에 안전 수칙을 우선 적용할 필요가 있습니다.",isHot:true},
     {order:3,category:"국제",title:"주요국 정책 일정이 이어집니다",summary:"이번 주 발표가 시장과 국내 정책 논의에 어떤 영향을 주는지 지켜볼 사안입니다."},
@@ -18,7 +18,6 @@ export const demoData = {
     {id:"policy",name:"정책브리핑",sourceType:"OFFICIAL",trustLevel:"A",collectionMethod:"RSS",active:true,lastStatus:"SUCCESS"},
     {id:"news",name:"뉴스 샘플",sourceType:"NEWS",trustLevel:"B",collectionMethod:"RSS",active:true,lastStatus:"SUCCESS"}
   ],
-  audioAssets:[{id:"audio-1",editionId:"daily-2026-08-06-v1",provider:"Browser TTS",voice:"ko-KR",version:1,status:"READY"}],
   auditLogs:[{id:"log-1",action:"system.seeded",entityType:"system",actorEmail:"admin@jamsi.local",createdAt:new Date().toISOString()}],
   config:{adsEnabled:false,maintenanceEnabled:false,maintenanceMessage:"",minimumVersion:"1.0.0"}
 };
