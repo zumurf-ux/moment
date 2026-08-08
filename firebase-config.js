@@ -4,7 +4,6 @@ export const firebaseConfig = {
   apiKey: "AIzaSyBRWlA5RmVNo83hm5QdMwVTieA7RMeQKnk",
   authDomain: "moment-jamsi.firebaseapp.com",
   projectId: "moment-jamsi",
-  storageBucket: "moment-jamsi.firebasestorage.app",
   messagingSenderId: "30188628493",
   appId: "1:30188628493:web:9cc7d45f09007e8f518344",
 };
