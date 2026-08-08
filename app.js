@@ -1,5 +1,5 @@
-import { firebaseConfig } from "./firebase-config.js?v=2";
-import { demoData } from "./demo-data.js?v=2";
+import { firebaseConfig } from "./firebase-config.js?v=3";
+import { demoData } from "./demo-data.js?v=3";
 
 const sdk = "https://www.gstatic.com/firebasejs/12.16.0";
 const configured = Boolean(firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.appId);
@@ -52,7 +52,7 @@ function editions(){ const current=state.data.editions.find(x=>x.id===state.sele
 function candidates(){ return head("이슈 후보","활성 소스에서 생성된 편집 후보입니다.",`<button class="secondary" data-action="pipeline">후보 갱신</button><button class="primary" data-action="create-draft">선택 후보로 초안 생성</button>`)+`<article class="card">${state.data.candidates.map(x=>`<div class="candidate"><input type="checkbox" data-candidate="${x.id}" ${state.selectedCandidates.has(x.id)?'checked':''}><div><h3>${esc(x.title)}</h3><p>${esc(x.summary)} · 출처 ${(x.sourceIds||[]).length}개</p></div><span class="badge">${esc(x.trustGrade||"B")} · ${x.score||0}</span></div>`).join("")||'<p class="empty">후보가 없습니다.</p>'}</article>`; }
 function sources(){ return head("수집 소스","공식·뉴스·트렌드 소스를 관리합니다.")+`<article class="card"><form id="sourceForm" class="source-form"><input id="sourceName" placeholder="소스 이름" required><select id="sourceType"><option>OFFICIAL</option><option>NEWS</option><option>TREND</option></select><select id="sourceMethod"><option>API</option><option>RSS</option><option>MANUAL</option></select><button class="primary">추가</button></form><div class="table-wrap"><table><thead><tr><th>이름</th><th>유형</th><th>신뢰</th><th>수집</th><th>상태</th><th>활성</th></tr></thead><tbody>${state.data.sources.map(x=>`<tr><td>${esc(x.name)}</td><td>${esc(x.sourceType)}</td><td>${esc(x.trustLevel)}</td><td>${esc(x.collectionMethod)}</td><td>${badge(x.lastStatus||"READY")}</td><td><label class="toggle"><input type="checkbox" data-source="${x.id}" ${x.active?'checked':''}>사용</label></td></tr>`).join("")}</tbody></table></div></article>`; }
 function auditView(){ return head("감사 로그","로그인과 주요 변경 기록입니다.")+`<div class="table-wrap"><table><thead><tr><th>시각</th><th>작업</th><th>대상</th><th>운영자</th></tr></thead><tbody>${state.data.auditLogs.map(x=>`<tr><td>${formatDate(x.createdAt)}</td><td class="code">${esc(x.action)}</td><td>${esc(x.entityType)} ${esc(x.entityId||"")}</td><td>${esc(x.actorEmail||x.actorUid||"system")}</td></tr>`).join("")}</tbody></table></div>`; }
-function settings(){ const x=state.data.config; return head("서비스 설정","Android 앱 원격 설정을 관리합니다.",`<button class="primary" data-action="save-settings">설정 저장</button>`)+`<article class="card"><div class="form-grid"><label class="check"><input id="adsEnabled" type="checkbox" ${x.adsEnabled?'checked':''}>광고 활성</label><label class="check"><input id="maintenanceEnabled" type="checkbox" ${x.maintenanceEnabled?'checked':''}>점검 모드</label><label class="full">점검 안내<textarea id="maintenanceMessage">${esc(x.maintenanceMessage||"")}</textarea></label><label>최소 앱 버전<input id="minimumVersion" value="${esc(x.minimumVersion||"1.0.0")}"></label></div></article>`; }
+function settings(){ const x=state.data.config; return head("서비스 설정","Android 앱 원격 설정과 운영자 계정을 관리합니다.",`<button class="primary" data-action="save-settings">설정 저장</button>`)+`<section class="grid two-col"><article class="card"><h2>앱 원격 설정</h2><div class="form-grid"><label class="check"><input id="adsEnabled" type="checkbox" ${x.adsEnabled?'checked':''}>광고 활성</label><label class="check"><input id="maintenanceEnabled" type="checkbox" ${x.maintenanceEnabled?'checked':''}>점검 모드</label><label class="full">점검 안내<textarea id="maintenanceMessage">${esc(x.maintenanceMessage||"")}</textarea></label><label>최소 앱 버전<input id="minimumVersion" value="${esc(x.minimumVersion||"1.0.0")}"></label></div></article><article class="card"><h2>운영자 아이디·비밀번호 변경</h2><p class="muted">현재 비밀번호로 본인 확인 후 변경합니다. 아이디는 로그인에 사용하는 이메일입니다.</p><form id="accountForm" class="form-grid"><label class="full">현재 아이디<input value="${esc(state.user?.email||"")}" disabled></label><label class="full">새 아이디(선택)<input id="newAccountEmail" type="email" autocomplete="email" placeholder="새 운영자 이메일"></label><label class="full">현재 비밀번호<input id="currentAccountPassword" type="password" autocomplete="current-password" required></label><label>새 비밀번호(선택)<input id="newAccountPassword" type="password" autocomplete="new-password" minlength="6" placeholder="6자 이상"></label><label>새 비밀번호 확인<input id="confirmAccountPassword" type="password" autocomplete="new-password" minlength="6"></label><div class="full"><button class="primary" type="submit">계정 변경 저장</button></div></form></article></section>`; }
 function render(){ renderNav(); const views={dashboard,editions,candidates,sources,audit:auditView,settings}; $("#content").innerHTML=views[state.view](); bindContent(); $("#content").focus(); }
 
 function bindContent(){
@@ -60,8 +60,36 @@ function bindContent(){
   document.querySelectorAll("[data-candidate]").forEach(el=>el.onchange=()=>{el.checked?state.selectedCandidates.add(el.dataset.candidate):state.selectedCandidates.delete(el.dataset.candidate);});
   document.querySelectorAll("[data-source]").forEach(el=>el.onchange=async()=>{await saveDoc("sources",el.dataset.source,{active:el.checked});toast("소스 상태를 저장했습니다.");render();});
   $("#sourceForm")?.addEventListener("submit",async e=>{e.preventDefault();const id=crypto.randomUUID();await saveDoc("sources",id,{name:$("#sourceName").value,sourceType:$("#sourceType").value,trustLevel:"B",collectionMethod:$("#sourceMethod").value,active:true,lastStatus:"READY"});toast("소스를 추가했습니다.");render();});
+  $("#accountForm")?.addEventListener("submit",changeAccount);
   document.querySelectorAll("[data-action]").forEach(el=>el.onclick=()=>handleAction(el.dataset.action));
 }
+async function changeAccount(event){
+  event.preventDefault();
+  try{
+    if(!configured) throw new Error("Firebase 연결 환경에서만 계정을 변경할 수 있습니다.");
+    const user=state.auth.currentUser; if(!user?.email) throw new Error("로그인 정보를 다시 확인하세요.");
+    const currentPassword=$("#currentAccountPassword").value;
+    const newEmail=$("#newAccountEmail").value.trim();
+    const newPassword=$("#newAccountPassword").value;
+    const confirmPassword=$("#confirmAccountPassword").value;
+    if(!newEmail&&!newPassword) throw new Error("새 아이디 또는 새 비밀번호를 입력하세요.");
+    if(newPassword&&newPassword.length<6) throw new Error("새 비밀번호는 6자 이상이어야 합니다.");
+    if(newPassword!==confirmPassword) throw new Error("새 비밀번호 확인이 일치하지 않습니다.");
+    const credential=state.api.EmailAuthProvider.credential(user.email,currentPassword);
+    await state.api.reauthenticateWithCredential(user,credential);
+    if(newEmail&&newEmail!==user.email) await state.api.updateEmail(user,newEmail);
+    if(newPassword) await state.api.updatePassword(user,newPassword);
+    await audit("account.credentials_updated","admins",user.uid);
+    $("#accountLabel").textContent=user.email||newEmail;
+    $("#email").value=user.email||newEmail;
+    toast("운영자 계정 정보를 변경했습니다.");
+    render();
+  }catch(error){
+    const messages={"auth/invalid-credential":"현재 비밀번호가 올바르지 않습니다.","auth/wrong-password":"현재 비밀번호가 올바르지 않습니다.","auth/email-already-in-use":"이미 사용 중인 아이디입니다.","auth/invalid-email":"새 아이디 이메일 형식을 확인하세요.","auth/weak-password":"새 비밀번호는 6자 이상이어야 합니다.","auth/requires-recent-login":"다시 로그인한 뒤 변경해 주세요."};
+    toast(messages[error?.code]||error.message||"계정 정보를 변경하지 못했습니다.");
+  }
+}
+
 async function handleAction(action){
   try{
     const edition=state.data.editions.find(x=>x.id===state.selectedEdition)||state.data.editions[0];
