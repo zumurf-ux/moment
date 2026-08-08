@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#e4d8c5">
+  <meta name="theme-color" content="#edf0f2">
   <title>오늘의 잠시</title>
-  <link rel="stylesheet" href="./styles.css?v=8">
+  <link rel="stylesheet" href="./styles.css?v=9">
 </head>
 <body class="reader-body">
   <main class="user-preview">
@@ -14,7 +14,7 @@
     <div id="userIssues"></div>
 </main>
   <script type="module">
-    import { demoData } from './demo-data.js?v=7';
+    import { demoData } from './demo-data.js?v=9';
     const edition = demoData.editions[0];
     const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
     document.querySelector('#userHeadline').textContent = edition.headline;
@@ -29,3 +29,5 @@
   </script>
 </body>
 </html>
+
+
