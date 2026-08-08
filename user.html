@@ -3,30 +3,61 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#edf0f2">
-  <title>오늘의 잠시</title>
-  <link rel="stylesheet" href="./styles.css?v=10">
+  <meta name="theme-color" content="#ffffff">
+  <title>잠시</title>
+  <link rel="stylesheet" href="./styles.css?v=12">
 </head>
 <body class="reader-body">
   <main class="user-preview">
-    <p id="editionDateLine" class="eyebrow">오늘의 잠시 · 일간</p>
-    <h1 id="userHeadline"></h1>
+    <p id="editionDateLine" class="eyebrow">잠시 · 일간</p>
+    <h1 id="userHeadline">잠시</h1>
     <div id="userIssues"></div>
   </main>
   <script type="module">
-    import { demoData } from './demo-data.js?v=10';
-    const edition = demoData.editions[0];
+    import { firebaseConfig } from './firebase-config.js?v=12';
+    import { demoData } from './demo-data.js?v=12';
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js';
+    import { collection, getDocs, getFirestore, query, where } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js';
+
     const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
-    document.querySelector('#userHeadline').textContent = edition.headline;
-    document.querySelector('#editionDateLine').textContent = `${edition.sourceDate.replaceAll('-', '.')} 이슈 · ${edition.publishDate.replaceAll('-', '.')} 발행`;
-    document.querySelector('#userIssues').innerHTML = edition.items.map((item, index) => `
-      <article>
-        <span class="eyebrow">${String(index + 1).padStart(2, '0')} · ${escapeHtml(item.category)}</span>
-        <h2>${escapeHtml(item.title)}</h2>
-        <p>${escapeHtml(item.summary)}</p>
-        <small class="fact-source">확인 · ${escapeHtml(item.factDate)} · <a href="${escapeHtml(item.sourceUrl)}" target="_blank" rel="noreferrer">${escapeHtml(item.sourceName)}</a></small>
-      </article>
-    `).join('');
+    const visibleTime = edition => {
+      const value = edition.visibleAt;
+      if (!value) return new Date(`${edition.publishDate}T05:00:00+09:00`).getTime();
+      if (typeof value?.toDate === 'function') return value.toDate().getTime();
+      return new Date(value).getTime();
+    };
+    const selectVisibleEdition = editions => editions
+      .filter(edition => edition.status === 'PUBLISHED' && visibleTime(edition) <= Date.now())
+      .sort((a,b) => String(b.publishDate).localeCompare(String(a.publishDate)) || Number(b.version||0)-Number(a.version||0))[0];
+
+    function render(edition) {
+      document.querySelector('#userHeadline').textContent = edition.headline;
+      document.querySelector('#editionDateLine').textContent = `${edition.sourceDate.replaceAll('-', '.')} 이슈 · ${edition.publishDate.replaceAll('-', '.')} 오전 5시 발행`;
+      document.querySelector('#userIssues').innerHTML = edition.items.map((item, index) => `
+        <article>
+          <span class="eyebrow">${String(index + 1).padStart(2, '0')} · ${escapeHtml(item.category)}</span>
+          <h2>${escapeHtml(item.title)}</h2>
+          <p>${escapeHtml(item.summary)}</p>
+          <small class="fact-source">확인 · ${escapeHtml(item.factDate)} · <a href="${escapeHtml(item.sourceUrl)}" target="_blank" rel="noreferrer">${escapeHtml(item.sourceName)}</a></small>
+        </article>
+      `).join('');
+    }
+
+    async function load() {
+      let editions = demoData.editions;
+      try {
+        const db = getFirestore(initializeApp(firebaseConfig));
+        const snapshot = await getDocs(query(collection(db,'editions'),where('type','==','daily'),where('status','==','PUBLISHED')));
+        editions = snapshot.docs.map(doc => ({id:doc.id,...doc.data()}));
+      } catch (error) {
+        console.warn('파이어베이스 발행본을 불러오지 못해 저장본을 표시합니다.');
+      }
+      const edition = selectVisibleEdition(editions) || selectVisibleEdition(demoData.editions);
+      if (edition) render(edition);
+      const nextVisibleAt = editions.map(visibleTime).filter(time => time > Date.now()).sort((a,b)=>a-b)[0];
+      if (nextVisibleAt) setTimeout(() => location.reload(), Math.min(nextVisibleAt-Date.now()+500, 2147483647));
+    }
+    load();
   </script>
 </body>
 </html>
