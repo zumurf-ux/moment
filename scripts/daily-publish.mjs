@@ -142,7 +142,15 @@ for (let attempt = 1; attempt <= 3; attempt += 1) {
     validationErrors = ['Gemini 응답에 분석 결과가 없음'];
   } else {
     try {
-      analysis = JSON.parse(raw);
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        analysis = { items: parsed };
+      } else if (Array.isArray(parsed?.items)) {
+        analysis = parsed;
+      } else {
+        const arrayEntry = Object.entries(parsed || {}).find(([, value]) => Array.isArray(value));
+        analysis = arrayEntry ? { ...parsed, items: arrayEntry[1] } : parsed;
+      }
       validationErrors = validateAnalysis(analysis);
     } catch (error) {
       validationErrors = [`JSON 파싱 오류: ${error.message}`];
