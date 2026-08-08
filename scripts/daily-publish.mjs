@@ -29,6 +29,43 @@ const addDays = (value, days) => {
 const sourceDate = process.env.SOURCE_DATE || addDays(kstDate(), -1);
 const publishDate = addDays(sourceDate, 1);
 const visibleAt = `${publishDate}T05:00:00+09:00`;
+
+const authResponse = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_API_KEY}`, {
+  method: 'POST', headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ email: FIREBASE_ADMIN_EMAIL, password: FIREBASE_ADMIN_PASSWORD, returnSecureToken: true }),
+});
+if (!authResponse.ok) throw new Error(`Firebase 인증 실패: ${authResponse.status}`);
+const { idToken } = await authResponse.json();
+
+async function hasPublishedEditionForDate() {
+  const response = await fetch(`https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/${DATABASE_ID}/documents:runQuery`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${idToken}`, 'content-type': 'application/json' },
+    body: JSON.stringify({
+      structuredQuery: {
+        from: [{ collectionId: 'editions' }],
+        where: {
+          fieldFilter: {
+            field: { fieldPath: 'publishDate' },
+            op: 'EQUAL',
+            value: { stringValue: publishDate },
+          },
+        },
+        limit: 20,
+      },
+    }),
+  });
+  if (!response.ok) throw new Error(`기존 발행본 확인 실패: ${response.status} ${await response.text()}`);
+  const rows = await response.json();
+  return rows.some(row => row.document?.fields?.type?.stringValue === 'daily'
+    && row.document?.fields?.status?.stringValue === 'PUBLISHED');
+}
+
+if (await hasPublishedEditionForDate()) {
+  console.log(`${publishDate} 발행본이 이미 확정되어 있어 다시 분석하거나 덮어쓰지 않습니다.`);
+  process.exit(0);
+}
+
 const MARKET_URL = 'https://polling.finance.naver.com/api/realtime/domestic/index/KOSPI,KOSDAQ';
 const feedUrl = query => `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=ko&gl=KR&ceid=KR:ko`;
 const feeds = SECTIONS.flatMap(([section, queries]) => queries.map(query => [section, feedUrl(query)]));
@@ -258,12 +295,7 @@ const edition = {
   selectionFactors: '8개 이슈 분야별 1개·금융·증시 별도 제공·코스피·코스닥 종가 검증·대표 언론사 중복 금지·최신성 25%·국민 영향도 30%·안전성 25%·출처 검증도 20%',
 };
 
-const authResponse = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_API_KEY}`, {
-  method: 'POST', headers: { 'content-type': 'application/json' },
-  body: JSON.stringify({ email: FIREBASE_ADMIN_EMAIL, password: FIREBASE_ADMIN_PASSWORD, returnSecureToken: true }),
-});
-if (!authResponse.ok) throw new Error(`Firebase 인증 실패: ${authResponse.status}`);
-const { idToken } = await authResponse.json();
+
 
 function firestoreValue(value) {
   if (value === null || value === undefined) return { nullValue: null };
