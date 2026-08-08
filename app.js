@@ -156,7 +156,7 @@ async function handleAction(action){
     if(action==="save-edition"){ const visibleAt=`${$("#editionVisibleAt").value}:00+09:00`; await saveDoc("editions",edition.id,{headline:$("#editionHeadline").value,publishDate:$("#editionDate").value,visibleAt,reviewChecklist:[...document.querySelectorAll(".review-check")].map(x=>x.checked)}); toast("발행본을 저장했습니다."); }
     if(action==="schedule-edition"){ const checks=[...document.querySelectorAll(".review-check")]; if(checks.some(x=>!x.checked))throw new Error("12개 검수 항목을 모두 확인하세요."); const publishDate=$("#editionDate").value; const sourceDate=edition.sourceDate||previousDate(publishDate); if(previousDate(publishDate)!==sourceDate)throw new Error("발행일은 이슈 기준일의 다음 날이어야 합니다."); const visibleAt=`${publishDate}T05:00:00+09:00`; await saveDoc("editions",edition.id,{status:"PUBLISHED",publishDate,sourceDate,visibleAt,reviewedAt:now(),reviewChecklist:checks.map(()=>true)}); toast(`${publishDate} 오전 5시 공개로 예약했습니다.`); }
     if(action==="withdraw"){ await saveDoc("editions",edition.id,{status:"WITHDRAWN",withdrawnAt:now()}); toast("발행본을 철회했습니다."); }
-    if(action==="save-settings"){ const cfg={adsEnabled:$("#adsEnabled").checked,maintenanceEnabled:$("#maintenanceEnabled").checked,maintenanceMessage:$("#maintenanceMessage").value,minimumVersion:$("#minimumVersion").value}; if(configured){const{doc,setDoc}=state.api;await setDoc(doc(state.db,"appConfig","android"),cfg,{merge:true});await audit("config.updated","appConfig","android");await loadFirebaseData();}else state.data.config=cfg;toast("서비스 설정을 저장했습니다."); }
+    if(action==="save-settings"){ const cfg={adsEnabled:$("#adsEnabled").checked,maintenanceEnabled:$("#maintenanceEnabled").checked,maintenanceMessage:$("#maintenanceMessage").value,minimumVersion:$("#minimumVersion").value,interstitialMinSeconds:30,interstitialMaxPerSession:1,interstitialPlacement:"content_end_after_30s",bannerPlacement:"bottom_anchored"}; if(configured){const{doc,setDoc}=state.api;await setDoc(doc(state.db,"appConfig","android"),cfg,{merge:true});await audit("config.updated","appConfig","android");await loadFirebaseData();}else state.data.config=cfg;toast("서비스 설정을 저장했습니다."); }
     render();
   }catch(error){toast(error.message||"작업을 완료하지 못했습니다.");}
 }
@@ -165,4 +165,3 @@ $("#loginForm").addEventListener("submit",async e=>{e.preventDefault();try{await
 $("#logoutButton").onclick=signOut;
 $("#nav").onclick=e=>{const button=e.target.closest("[data-view]");if(!button)return;state.view=button.dataset.view;render();};
 initializeFirebase().catch(error=>{setConnection(false,"파이어베이스 연결 오류");$("#modeBanner").textContent="서비스에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.";});
-
