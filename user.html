@@ -26,9 +26,17 @@
       if (typeof edition.visibleAt?.toDate === 'function') return edition.visibleAt.toDate().getTime();
       return new Date(edition.visibleAt).getTime();
     };
+    const reviewedTime = edition => {
+      const value = edition.reviewedAt || edition.updatedAt || edition.createdAt;
+      if (typeof value?.toDate === 'function') return value.toDate().getTime();
+      const time = value ? new Date(value).getTime() : 0;
+      return Number.isFinite(time) ? time : 0;
+    };
     const selectVisibleEdition = editions => editions
       .filter(edition => edition.status === 'PUBLISHED' && visibleTime(edition) <= Date.now())
-      .sort((a,b) => String(b.publishDate).localeCompare(String(a.publishDate)) || Number(b.version||0)-Number(a.version||0))[0];
+      .sort((a,b) => String(b.publishDate).localeCompare(String(a.publishDate))
+        || reviewedTime(b) - reviewedTime(a)
+        || Number(b.version||0) - Number(a.version||0))[0];
 
     function render(edition) {
       document.querySelector('#userHeadline').textContent = edition.headline;
