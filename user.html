@@ -5,26 +5,20 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#ffffff">
   <title>잠시</title>
-  <link rel="stylesheet" href="./styles.css?v=20">
+  <link rel="stylesheet" href="./styles.css?v=21">
 </head>
 <body class="reader-body">
   <main class="user-preview">
     <header class="reader-brand" aria-label="잠시">
-      <img src="./app-icon.png?v=3" alt="" width="76" height="76">
+      <img src="./app-icon.png?v=4" alt="" width="68" height="68">
       <div class="reader-brand-copy">
         <span>잠시</span>
         <small>하루 한 번, 세상을 보는 잠시</small>
       </div>
     </header>
-    <section class="edition-lead" aria-labelledby="userHeadline">
-      <div class="edition-bar">
-        <p id="editionDateLine">잠시 · 일간</p>
-        <span id="issueCount" class="issue-count">주요 이슈</span>
-      </div>
-      <p class="edition-kicker">하루의 흐름</p>
-      <h1 id="userHeadline">잠시</h1>
-    </section>
-    <div id="userIssues" class="issue-list"></div>
+    <p id="editionDateLine" class="eyebrow">잠시 · 일간</p>
+    <h1 id="userHeadline">잠시</h1>
+    <div id="userIssues"></div>
     <footer class="reader-footer">© 2026 디자인하는삼촌 / 버전 1.0.00</footer>
   </main>
   <script type="module">
@@ -46,18 +40,11 @@
     function render(edition) {
       document.querySelector('#userHeadline').textContent = edition.headline;
       document.querySelector('#editionDateLine').textContent = `${edition.publishDate.replaceAll('-', '.')} · 매일 오전 5시 발행`;
-      document.querySelector('#issueCount').textContent = `주요 이슈 ${edition.items.length}건`;
       document.querySelector('#userIssues').innerHTML = edition.items.map((item, index) => `
-        <article class="issue-item${index === 0 ? ' issue-featured' : ''}">
-          <div class="issue-meta">
-            <span class="issue-number">${String(index + 1).padStart(2, '0')}</span>
-            <span class="issue-category">${escapeHtml(item.category)}</span>
-            ${index === 0 ? '<span class="issue-focus">핵심</span>' : ''}
-          </div>
-          <div class="issue-copy">
-            <h2>${escapeHtml(item.title)}</h2>
-            <p>${escapeHtml(item.summary)}</p>
-          </div>
+        <article>
+          <span class="eyebrow">${String(index + 1).padStart(2, '0')} · ${escapeHtml(item.category)}</span>
+          <h2>${escapeHtml(item.title)}</h2>
+          <p>${escapeHtml(item.summary)}</p>
         </article>
       `).join('');
     }
