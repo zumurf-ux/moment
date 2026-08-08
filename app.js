@@ -1,5 +1,5 @@
-import { firebaseConfig } from "./firebase-config.js";
-import { demoData } from "./demo-data.js";
+import { firebaseConfig } from "./firebase-config.js?v=2";
+import { demoData } from "./demo-data.js?v=2";
 
 const sdk = "https://www.gstatic.com/firebasejs/12.16.0";
 const configured = Boolean(firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.appId);
