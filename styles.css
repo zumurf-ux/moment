@@ -12,7 +12,7 @@
 .reader-body .user-preview>*{position:relative;z-index:1}
 .reader-body .reader-brand{display:flex;align-items:center;gap:11px;margin:0 0 24px}
 .reader-body .reader-brand img{width:48px;height:48px;border-radius:12px;display:block;box-shadow:0 2px 7px rgba(21,48,71,.13)}
-.reader-body .reader-brand-copy{display:flex;flex-direction:column;gap:5px}
+.reader-body .reader-brand-copy{display:flex;flex-direction:column;justify-content:center;gap:5px;height:48px}
 .reader-body .reader-brand-copy span{font-size:23px;line-height:1;font-weight:900;letter-spacing:-.04em;color:#153047}
 .reader-body .reader-brand-copy small{font-size:11px;line-height:1.2;font-weight:600;letter-spacing:-.01em;color:#7a8288}
 .reader-body .eyebrow{font-family:inherit;color:#606970;letter-spacing:.16em}
