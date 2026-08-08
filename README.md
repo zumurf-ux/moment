@@ -6,6 +6,7 @@
 - Firebase Authentication 및 Cloud Firestore 연동
 - Android 사용자 앱은 로컬 D 드라이브 작업본에서 관리
 - 관리자 계정은 공개 저장소에 포함하지 않음
+- 음성·파일 업로드 기능을 사용하지 않아 Firebase Storage 불필요
 
 ## 배포 주소
 
