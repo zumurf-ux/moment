@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="잠시 브리핑 운영자 콘솔">
+  <title>Moment · 잠시 운영실</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <main id="loginView" class="login-page">
+    <section class="login-card">
+      <div class="brand-mark">잠시</div>
+      <p class="eyebrow">MOMENT EDITORIAL DESK</p>
+      <h1>운영자 로그인</h1>
+      <p class="muted">발행·검수·음성·수집 소스를 한 곳에서 관리합니다.</p>
+      <div id="modeBanner" class="mode-banner"></div>
+      <form id="loginForm">
+        <label>이메일<input id="email" type="email" autocomplete="username" value="admin@jamsi.local" required></label>
+        <label>비밀번호<input id="password" type="password" autocomplete="current-password" required></label>
+        <button class="primary wide" type="submit">로그인</button>
+      </form>
+    </section>
+  </main>
+
+  <div id="appView" class="app-shell hidden">
+    <aside class="sidebar">
+      <div class="side-brand"><strong>잠시</strong><span>MOMENT</span></div>
+      <nav id="nav" aria-label="운영 메뉴"></nav>
+      <div class="connection"><span id="connectionDot"></span><span id="connectionText">연결 확인 중</span></div>
+    </aside>
+
+    <div class="workspace">
+      <header class="topbar">
+        <div><strong>운영 환경</strong><span id="environmentLabel">Firebase</span></div>
+        <div class="top-actions">
+          <a href="./user.html" target="_blank" rel="noreferrer">사용자 앱 보기</a>
+          <span id="accountLabel">admin</span>
+          <button id="logoutButton" class="ghost">로그아웃</button>
+        </div>
+      </header>
+      <main id="content" class="content" tabindex="-1"></main>
+    </div>
+  </div>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
