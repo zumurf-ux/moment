@@ -20,3 +20,6 @@
 .reader-body .fact-source{margin-top:11px;font-family:inherit;color:#153047}
 .reader-body .reader-footer{margin-top:24px;padding-top:20px;border-top:1px solid rgba(58,68,75,.28);text-align:center;font-size:11px;letter-spacing:.04em;color:#707980}
 @media(max-width:600px){.reader-body{padding:0}.reader-body .user-preview{min-height:100vh;padding:28px 22px 40px;border:0;border-radius:0;box-shadow:none}.reader-body .user-preview>h1{font-size:27px}}
+
+.settings-footer{width:100%;padding:30px 0 8px;text-align:center;font-size:12px;color:var(--muted);letter-spacing:.02em}
+
