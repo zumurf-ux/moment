@@ -29,8 +29,57 @@ const addDays = (value, days) => {
 const sourceDate = process.env.SOURCE_DATE || addDays(kstDate(), -1);
 const publishDate = addDays(sourceDate, 1);
 const visibleAt = `${publishDate}T05:00:00+09:00`;
+const MARKET_URL = 'https://polling.finance.naver.com/api/realtime/domestic/index/KOSPI,KOSDAQ';
 const feedUrl = query => `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=ko&gl=KR&ceid=KR:ko`;
 const feeds = SECTIONS.flatMap(([section, queries]) => queries.map(query => [section, feedUrl(query)]));
+
+async function collectMarketSnapshot() {
+  const response = await fetch(MARKET_URL, { headers: { 'user-agent': 'JamsiDailyBot/2.0' } });
+  if (!response.ok) throw new Error(`국내 증시 지수 수집 실패: ${response.status}`);
+  const payload = await response.json();
+  const byCode = new Map((payload.datas || []).map(item => [item.itemCode, item]));
+  const kospi = byCode.get('KOSPI');
+  const kosdaq = byCode.get('KOSDAQ');
+  if (!kospi || !kosdaq || !kospi.localTradedAt || !kosdaq.localTradedAt) {
+    throw new Error('코스피·코스닥 종가 정보가 완전하지 않아 자동 발행을 중단합니다.');
+  }
+  const tradedDate = String(kospi.localTradedAt).slice(0, 10);
+  if (tradedDate !== String(kosdaq.localTradedAt).slice(0, 10)) {
+    throw new Error('코스피·코스닥 기준일이 서로 달라 자동 발행을 중단합니다.');
+  }
+  const direction = item => item.compareToPreviousPrice?.text || (Number(item.compareToPreviousClosePriceRaw) >= 0 ? '상승' : '하락');
+  const absolute = value => Math.abs(Number(value || 0)).toLocaleString('ko-KR', { maximumFractionDigits: 2 });
+  const isSourceDateTradingDay = tradedDate === sourceDate;
+  return {
+    category: '금융·증시',
+    title: isSourceDateTradingDay
+      ? `코스피 ${kospi.closePrice}·코스닥 ${kosdaq.closePrice}로 마감`
+      : `${Number(sourceDate.slice(5, 7))}월 ${Number(sourceDate.slice(8, 10))}일 국내 증시 휴장`,
+    summary: isSourceDateTradingDay
+      ? `코스피는 전일보다 ${absolute(kospi.compareToPreviousClosePriceRaw)}포인트(${absolute(kospi.fluctuationsRatioRaw)}%) ${direction(kospi)}했고, 코스닥은 ${absolute(kosdaq.compareToPreviousClosePriceRaw)}포인트(${absolute(kosdaq.fluctuationsRatioRaw)}%) ${direction(kosdaq)}했습니다.`
+      : `최근 거래일 ${tradedDate.replaceAll('-', '.')} 종가는 코스피 ${kospi.closePrice}, 코스닥 ${kosdaq.closePrice}였습니다.`,
+    sourceName: '네이버 금융 국내증시',
+    sourceNames: ['네이버 금융 국내증시'],
+    sourceUrl: MARKET_URL,
+    sourceUrls: [MARKET_URL],
+    sourceDate,
+    marketDate: tradedDate,
+    isTradingDay: isSourceDateTradingDay,
+    kospi: {
+      close: kospi.closePrice,
+      change: kospi.compareToPreviousClosePrice,
+      changeRate: kospi.fluctuationsRatio,
+      direction: direction(kospi),
+    },
+    kosdaq: {
+      close: kosdaq.closePrice,
+      change: kosdaq.compareToPreviousClosePrice,
+      changeRate: kosdaq.fluctuationsRatio,
+      direction: direction(kosdaq),
+    },
+  };
+}
+const marketSnapshotPromise = collectMarketSnapshot();
 
 const decodeXml = text => text
   .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
@@ -162,6 +211,7 @@ for (let attempt = 1; attempt <= 3; attempt += 1) {
 if (validationErrors.length > 0) throw new Error(`AI 결과 검증 3회 실패: ${validationErrors.join(' / ')}`);
 
 analysis.items.sort((a, b) => Number(b.score || 0) - Number(a.score || 0));
+const marketSnapshot = await marketSnapshotPromise;
 const editionItems = analysis.items.map((item, index) => ({
   order: index + 1,
   category: item.category,
@@ -176,18 +226,28 @@ const editionItems = analysis.items.map((item, index) => ({
   selectionScore: Number(item.score || 0),
   selectionReason: item.reason,
 }));
-const editionId = `daily-${publishDate}-ai-v2`;
+const economyIndex = editionItems.findIndex(item => item.category === '경제');
+editionItems.splice(economyIndex >= 0 ? economyIndex + 1 : 1, 0, {
+  order: 0,
+  ...marketSnapshot,
+  factDate: sourceDate.replaceAll('-', '.'),
+  isHot: false,
+  selectionScore: 0,
+  selectionReason: marketSnapshot.isTradingDay ? '국내 증시 거래일 종가 자동 수집' : '휴장일과 최근 거래일 종가 자동 확인',
+});
+editionItems.forEach((item, index) => { item.order = index + 1; });
+const editionId = `daily-${publishDate}-ai-v3`;
 const edition = {
-  type: 'daily', publishDate, sourceDate, visibleAt, version: 2, status: 'PUBLISHED',
+  type: 'daily', publishDate, sourceDate, visibleAt, version: 3, status: 'PUBLISHED',
   headline: `${Number(sourceDate.slice(5, 7))}월 ${Number(sourceDate.slice(8, 10))}일 핵심 이슈`,
   sourceWindowStart: `${sourceDate}T00:00:00+09:00`, sourceWindowEnd: `${sourceDate}T23:59:59+09:00`,
   items: editionItems,
-  sourceCount: new Set(analysis.items.flatMap(item => item.sourceNames)).size,
+  sourceCount: new Set([...analysis.items.flatMap(item => item.sourceNames), marketSnapshot.sourceName]).size,
   reviewedAt: new Date().toISOString(),
-  reviewMode: 'AI 분야 균형·언론사 분산·복수 출처 교차검증',
+  reviewMode: 'AI 분야 균형·언론사 분산·복수 출처 교차검증·국내 증시 종가 자동 수집',
   politicalToneEnabled: false,
   selectionModel: `GitHub Models ${MODEL}`,
-  selectionFactors: '분야별 1개·대표 언론사 중복 금지·최신성 25%·국민 영향도 30%·안전성 25%·출처 검증도 20%',
+  selectionFactors: '8개 이슈 분야별 1개·금융·증시 별도 제공·코스피·코스닥 종가 검증·대표 언론사 중복 금지·최신성 25%·국민 영향도 30%·안전성 25%·출처 검증도 20%',
 };
 
 const authResponse = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_API_KEY}`, {
@@ -223,11 +283,18 @@ await Promise.all(analysis.items.map((item, index) => setDocument('candidates', 
   analysisFactors: item.factors, analysisScore: Number(item.score || 0), analysisRank: index + 1,
   analysisReason: item.reason, analyzedAt: new Date().toISOString(),
 })));
+await setDocument('candidates', `${sourceDate}-market`, {
+  ...marketSnapshot,
+  verified: true,
+  trustGrade: 'A',
+  sourceIds: ['naver-finance-market'],
+  analyzedAt: new Date().toISOString(),
+});
 await setDocument('auditLogs', `auto-publish-${publishDate}`, {
   action: 'daily.auto_published', entityType: 'editions', entityId: editionId,
   actorEmail: 'github-actions@jamsi', sourceDate, publishDate, visibleAt, model: MODEL,
-  categoryCoverage: [...requiredCategories], representativeSourceCount: new Set(analysis.items.map(item => item.sourceName)).size,
+  categoryCoverage: [...requiredCategories, '금융·증시'], representativeSourceCount: new Set(analysis.items.map(item => item.sourceName)).size,
   createdAt: new Date().toISOString(),
 });
-console.log(`${sourceDate} 전 분야 8개 이슈 분석 완료 → ${visibleAt} 공개 예약`);
+console.log(`${sourceDate} 전 분야 8개 이슈와 코스피·코스닥 금융 정보 분석 완료 → ${visibleAt} 공개 예약`);
 
