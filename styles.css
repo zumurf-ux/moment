@@ -26,3 +26,56 @@
 .reader-body .reader-footer{margin-top:24px;padding-top:20px;border-top:1px solid rgba(58,68,75,.28);text-align:center;font-size:11px;letter-spacing:.04em;color:#707980}
 @media(max-width:600px){.reader-body{padding:0}.reader-body .user-preview{min-height:100vh;padding:28px 22px 40px;border:0;border-radius:0;box-shadow:none}.reader-body .user-preview>h1{font-size:27px}}
 
+/* 2026-08 editorial renewal */
+.reader-body{--reader-ink:#101820;--reader-navy:#14354d;--reader-blue:#587387;--reader-accent:#d66b45;--reader-wash:#eef3f5;--reader-rule:rgba(20,53,77,.2);padding:22px;background-color:#f1f3f3;background-image:radial-gradient(circle at 15% 20%,rgba(255,255,255,.95) 0 1px,transparent 1.6px),radial-gradient(circle at 75% 64%,rgba(20,53,77,.035) 0 .5px,transparent 1px);background-size:29px 31px,19px 23px}
+.reader-body .user-preview{overflow:hidden;max-width:640px;min-height:calc(100vh - 44px);padding:0 0 46px;border:1px solid rgba(20,53,77,.14);border-top:6px solid var(--reader-navy);border-radius:2px;background-color:#fff;background-image:repeating-linear-gradient(1deg,transparent 0 8px,rgba(16,24,32,.016) 8px 8.7px),repeating-linear-gradient(91deg,transparent 0 23px,rgba(16,24,32,.009) 23px 23.7px);box-shadow:0 3px 10px rgba(20,53,77,.08),0 24px 56px rgba(20,53,77,.12)}
+.reader-body .reader-brand{position:relative;display:flex;align-items:center;gap:16px;margin:0;padding:24px 32px 21px;border-bottom:1px solid var(--reader-rule);background:linear-gradient(135deg,rgba(238,243,245,.65),rgba(255,255,255,0) 52%)}
+.reader-body .reader-brand:after{content:"";position:absolute;right:32px;bottom:-2px;width:54px;height:4px;background:var(--reader-accent)}
+.reader-body .reader-brand img{width:76px;height:76px;display:block;object-fit:contain;flex:0 0 76px}
+.reader-body .reader-brand-copy{display:flex;flex-direction:column;justify-content:center;gap:6px;height:76px;min-width:0}
+.reader-body .reader-brand-copy span{font-size:32px;line-height:1;font-weight:900;letter-spacing:-.055em;color:var(--reader-navy)}
+.reader-body .reader-brand-copy small{font-size:12px;line-height:1.35;font-weight:650;letter-spacing:-.015em;color:#68747c;white-space:nowrap}
+.reader-body .edition-lead{padding:25px 32px 28px;background:linear-gradient(180deg,rgba(238,243,245,.46),rgba(255,255,255,0))}
+.reader-body .edition-bar{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:24px;padding-bottom:13px;border-bottom:3px solid var(--reader-navy)}
+.reader-body #editionDateLine{margin:0;font-size:14px;line-height:1.5;font-weight:800;letter-spacing:.035em;color:var(--reader-navy)}
+.reader-body .issue-count{flex:none;padding:6px 9px;border:1px solid rgba(20,53,77,.18);border-radius:999px;background:#fff;font-size:10px;line-height:1;font-weight:800;letter-spacing:.04em;color:var(--reader-blue)}
+.reader-body .edition-kicker{display:flex;align-items:center;gap:8px;margin:0 0 8px!important;font-size:11px!important;line-height:1.2!important;font-weight:850!important;letter-spacing:.16em!important;color:var(--reader-accent)!important}
+.reader-body .edition-kicker:before{content:"";width:16px;height:3px;background:var(--reader-accent)}
+.reader-body .edition-lead>h1{margin:0;padding:0;border:0;font-family:inherit;font-size:36px;line-height:1.22;font-weight:900;letter-spacing:-.045em;color:var(--reader-ink);text-shadow:.3px .3px 0 rgba(20,53,77,.08)}
+.reader-body .issue-list{padding:7px 32px 0}
+.reader-body .issue-item{position:relative;display:grid;grid-template-columns:46px minmax(0,1fr);gap:16px;padding:25px 0 27px;border-top:1px solid var(--reader-rule)}
+.reader-body .issue-item:first-child{border-top:0}
+.reader-body .issue-meta{display:flex;flex-direction:column;align-items:flex-start;gap:7px;padding-top:2px}
+.reader-body .issue-number{font-size:16px;line-height:1;font-weight:900;letter-spacing:.04em;color:var(--reader-navy)}
+.reader-body .issue-category{max-width:46px;padding:5px 6px;border-radius:3px;background:var(--reader-wash);font-size:10px;line-height:1.25;font-weight:800;letter-spacing:-.02em;color:var(--reader-blue);word-break:keep-all;text-align:center}
+.reader-body .issue-focus{padding:4px 6px;border:1px solid rgba(214,107,69,.25);border-radius:3px;background:rgba(214,107,69,.08);font-size:9px;line-height:1;font-weight:900;letter-spacing:.05em;color:var(--reader-accent)}
+.reader-body .issue-copy{min-width:0}
+.reader-body .issue-copy h2{margin:0 0 10px;font-family:inherit;font-size:21px;line-height:1.42;font-weight:850;letter-spacing:-.035em;color:var(--reader-ink);text-shadow:none}
+.reader-body .issue-copy p{margin:0;color:#414a50;font-family:inherit;font-size:15.5px;line-height:1.82;letter-spacing:-.008em;word-break:keep-all}
+.reader-body .issue-featured{margin:6px -14px 13px;padding:25px 14px 27px;border-top:3px solid var(--reader-navy);border-bottom:1px solid rgba(20,53,77,.22);background:linear-gradient(120deg,rgba(238,243,245,.94),rgba(248,250,250,.72));box-shadow:inset 4px 0 0 var(--reader-accent)}
+.reader-body .issue-featured .issue-copy h2{font-size:25px;line-height:1.36}
+.reader-body .reader-footer{margin:24px 32px 0;padding-top:21px;border-top:3px double rgba(20,53,77,.35);text-align:center;font-size:10.5px;letter-spacing:.045em;color:#747f86}
+@media(max-width:600px){
+  .reader-body{padding:0}
+  .reader-body .user-preview{min-height:100vh;padding:0 0 38px;border:0;border-top:5px solid var(--reader-navy);border-radius:0;box-shadow:none}
+  .reader-body .reader-brand{gap:13px;padding:19px 20px 17px}
+  .reader-body .reader-brand:after{right:20px;width:42px}
+  .reader-body .reader-brand img{width:72px;height:72px;flex-basis:72px}
+  .reader-body .reader-brand-copy{height:72px;gap:5px}
+  .reader-body .reader-brand-copy span{font-size:30px}
+  .reader-body .reader-brand-copy small{font-size:11.5px}
+  .reader-body .edition-lead{padding:22px 20px 25px}
+  .reader-body .edition-bar{gap:10px;margin-bottom:21px;padding-bottom:12px}
+  .reader-body #editionDateLine{font-size:12.5px;letter-spacing:.015em}
+  .reader-body .issue-count{padding:5px 8px;font-size:9px}
+  .reader-body .edition-lead>h1{font-size:31px;line-height:1.25}
+  .reader-body .issue-list{padding:5px 20px 0}
+  .reader-body .issue-item{grid-template-columns:39px minmax(0,1fr);gap:12px;padding:23px 0 25px}
+  .reader-body .issue-number{font-size:14px}
+  .reader-body .issue-category{max-width:39px;padding:5px 4px;font-size:9px}
+  .reader-body .issue-copy h2{font-size:20px;line-height:1.43}
+  .reader-body .issue-copy p{font-size:15px;line-height:1.8}
+  .reader-body .issue-featured{margin:5px -8px 12px;padding:23px 8px 25px}
+  .reader-body .issue-featured .issue-copy h2{font-size:23px}
+  .reader-body .reader-footer{margin:22px 20px 0}
+}
