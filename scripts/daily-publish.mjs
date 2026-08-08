@@ -1,9 +1,9 @@
 const PROJECT_ID = 'moment-jamsi';
 const DATABASE_ID = '(default)';
-const { FIREBASE_API_KEY, FIREBASE_ADMIN_EMAIL, FIREBASE_ADMIN_PASSWORD, GITHUB_TOKEN } = process.env;
-const MODEL = process.env.AI_MODEL || 'openai/gpt-4.1';
+const { FIREBASE_API_KEY, FIREBASE_ADMIN_EMAIL, FIREBASE_ADMIN_PASSWORD, GEMINI_API_KEY } = process.env;
+const MODEL = process.env.AI_MODEL || 'gemini-3.1-flash-lite';
 
-for (const [name, value] of Object.entries({ FIREBASE_API_KEY, FIREBASE_ADMIN_EMAIL, FIREBASE_ADMIN_PASSWORD, GITHUB_TOKEN })) {
+for (const [name, value] of Object.entries({ FIREBASE_API_KEY, FIREBASE_ADMIN_EMAIL, FIREBASE_ADMIN_PASSWORD, GEMINI_API_KEY })) {
   if (!value) throw new Error(`${name} 환경값이 없습니다.`);
 }
 
@@ -98,23 +98,19 @@ JSON만 출력한다.
 
 기사 후보: ${JSON.stringify(articles)}`;
 
-const aiResponse = await fetch('https://models.github.ai/inference/chat/completions', {
+const aiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`, {
   method: 'POST',
-  headers: {
-    'content-type': 'application/json', authorization: `Bearer ${GITHUB_TOKEN}`,
-    accept: 'application/vnd.github+json',
-  },
+  headers: { 'content-type': 'application/json' },
   body: JSON.stringify({
-    model: MODEL, temperature: 0,
-    messages: [
-      { role: 'system', content: '주어진 기사 후보만 근거로 분야·언론사 균형을 지킨 사실 JSON만 출력한다.' },
-      { role: 'user', content: prompt },
-    ],
+    systemInstruction: { parts: [{ text: '주어진 기사 후보만 근거로 분야·언론사 균형을 지킨 사실 JSON만 출력한다.' }] },
+    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    generationConfig: { temperature: 0, responseMimeType: 'application/json' },
   }),
 });
 if (!aiResponse.ok) throw new Error(`AI 분석 실패: ${aiResponse.status} ${await aiResponse.text()}`);
 const aiPayload = await aiResponse.json();
-const raw = aiPayload.choices?.[0]?.message?.content?.replace(/^```json\s*|\s*```$/g, '').trim();
+const raw = aiPayload.candidates?.[0]?.content?.parts?.map(part => part.text || '').join('').replace(/^```json\s*|\s*```$/g, '').trim();
+if (!raw) throw new Error(`Gemini 응답에 분석 결과가 없습니다: ${JSON.stringify(aiPayload)}`);
 const analysis = JSON.parse(raw);
 
 const requiredCategories = new Set(SECTIONS.map(([section]) => section));
