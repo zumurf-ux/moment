@@ -1,19 +1,16 @@
-Exit code: 0
-Wall time: 0.2 seconds
-Output:
 <!doctype html>
 <html lang="ko">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#ffffff">
-  <title>?좎떆</title>
+  <title>잠시</title>
   <link rel="stylesheet" href="./styles.css?v=13">
 </head>
 <body class="reader-body">
   <main class="user-preview">
-    <p id="editionDateLine" class="eyebrow">?좎떆 쨌 ?쇨컙</p>
-    <h1 id="userHeadline">?좎떆</h1>
+    <p id="editionDateLine" class="eyebrow">잠시 · 일간</p>
+    <h1 id="userHeadline">잠시</h1>
     <div id="userIssues"></div>
   </main>
   <script type="module">
@@ -34,13 +31,13 @@ Output:
 
     function render(edition) {
       document.querySelector('#userHeadline').textContent = edition.headline;
-      document.querySelector('#editionDateLine').textContent = `${edition.sourceDate.replaceAll('-', '.')} ?댁뒋 쨌 ${edition.publishDate.replaceAll('-', '.')} ?ㅼ쟾 5??諛쒗뻾`;
+      document.querySelector('#editionDateLine').textContent = `${edition.sourceDate.replaceAll('-', '.')} 이슈 · ${edition.publishDate.replaceAll('-', '.')} 오전 5시 발행`;
       document.querySelector('#userIssues').innerHTML = edition.items.map((item, index) => `
         <article>
-          <span class="eyebrow">${String(index + 1).padStart(2, '0')} 쨌 ${escapeHtml(item.category)}</span>
+          <span class="eyebrow">${String(index + 1).padStart(2, '0')} · ${escapeHtml(item.category)}</span>
           <h2>${escapeHtml(item.title)}</h2>
           <p>${escapeHtml(item.summary)}</p>
-          <small class="fact-source">?뺤씤 쨌 ${escapeHtml(item.factDate)} 쨌 ${escapeHtml(item.sourceName)}</small>
+          <small class="fact-source">확인 · ${escapeHtml(item.factDate)} · ${escapeHtml(item.sourceName)}</small>
         </article>
       `).join('');
     }
@@ -52,7 +49,7 @@ Output:
         const snapshot = await getDocs(query(collection(db,'editions'),where('type','==','daily'),where('status','==','PUBLISHED')));
         editions = snapshot.docs.map(doc => ({id:doc.id,...doc.data()}));
       } catch (error) {
-        console.warn('Firebase 諛쒗뻾蹂몄쓣 遺덈윭?ㅼ? 紐삵빐 ??λ낯???쒖떆?⑸땲??');
+        console.warn('Firebase 발행본을 불러오지 못해 저장본을 표시합니다.');
       }
       const edition = selectVisibleEdition(editions) || selectVisibleEdition(demoData.editions);
       if (edition) render(edition);
@@ -63,4 +60,3 @@ Output:
   </script>
 </body>
 </html>
-
