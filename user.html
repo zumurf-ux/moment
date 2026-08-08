@@ -1,2 +1,31 @@
-<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>오늘의 잠시</title><link rel="stylesheet" href="./styles.css"></head><body><main class="user-preview"><p class="eyebrow">오늘의 잠시 · 일간</p><h1>오늘, 이 정도만 알아두세요</h1><div id="userIssues"></div><strong>오늘 잠시는 여기까지입니다.</strong></main><script type="module">import{demoData}from'./demo-data.js?v=5';document.querySelector('#userIssues').innerHTML=demoData.editions[0].items.map((x,i)=>`<article><span class="eyebrow">${String(i+1).padStart(2,'0')} · ${x.category}</span><h2>${x.title}</h2><p>${x.summary}</p></article>`).join('')</script></body></html>
-
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>오늘의 잠시</title>
+  <link rel="stylesheet" href="./styles.css?v=6">
+</head>
+<body>
+  <main class="user-preview">
+    <p class="eyebrow">오늘의 잠시 · 일간</p>
+    <h1 id="userHeadline"></h1>
+    <div id="userIssues"></div>
+    <strong>확인된 사실만 정리했습니다.</strong>
+  </main>
+  <script type="module">
+    import { demoData } from './demo-data.js?v=6';
+    const edition = demoData.editions[0];
+    const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+    document.querySelector('#userHeadline').textContent = edition.headline;
+    document.querySelector('#userIssues').innerHTML = edition.items.map((item, index) => `
+      <article>
+        <span class="eyebrow">${String(index + 1).padStart(2, '0')} · ${escapeHtml(item.category)}</span>
+        <h2>${escapeHtml(item.title)}</h2>
+        <p>${escapeHtml(item.summary)}</p>
+        <small class="fact-source">확인 · ${escapeHtml(item.factDate)} · <a href="${escapeHtml(item.sourceUrl)}" target="_blank" rel="noreferrer">${escapeHtml(item.sourceName)}</a></small>
+      </article>
+    `).join('');
+  </script>
+</body>
+</html>
