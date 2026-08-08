@@ -4,3 +4,4 @@
 @media(max-width:600px){.sidebar nav{grid-template-columns:repeat(2,1fr)}.top-actions a,.top-actions>span{display:none}.page-head{display:block}.page-head .actions{margin-top:14px}.metrics{grid-template-columns:repeat(2,1fr)}.login-card{padding:28px 22px}}
 
 .fact-source{display:block;margin-top:8px;color:var(--forest);font-size:11px;line-height:1.6}.fact-source a{color:inherit;font-weight:800}.policy-note{margin-top:18px;padding:14px;background:#edf3ef;border-left:3px solid var(--forest);font-size:12px;line-height:1.65}.policy-note p{margin:6px 0 0;color:#4f5b54}
+.policy-note a{display:inline-block;margin-top:8px;color:var(--forest);font-weight:800}
