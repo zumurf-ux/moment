@@ -15,7 +15,7 @@ service cloud.firestore {
     }
     match /appConfig/{platform} { allow read: if true; allow write: if isAdmin(); }
     match /{collection}/{document} {
-      allow read, write: if isAdmin() && collection in ['candidates','sources','audioAssets','auditLogs'];
+      allow read, write: if isAdmin() && collection in ['candidates','sources','auditLogs'];
     }
     match /admins/{uid} { allow read: if signedIn() && request.auth.uid == uid; allow write: if false; }
     match /{document=**} { allow read, write: if false; }
