@@ -98,35 +98,60 @@ JSON만 출력한다.
 
 기사 후보: ${JSON.stringify(articles)}`;
 
-const aiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`, {
-  method: 'POST',
-  headers: { 'content-type': 'application/json' },
-  body: JSON.stringify({
-    systemInstruction: { parts: [{ text: '주어진 기사 후보만 근거로 분야·언론사 균형을 지킨 사실 JSON만 출력한다.' }] },
-    contents: [{ role: 'user', parts: [{ text: prompt }] }],
-    generationConfig: { temperature: 0, responseMimeType: 'application/json' },
-  }),
-});
-if (!aiResponse.ok) throw new Error(`AI 분석 실패: ${aiResponse.status} ${await aiResponse.text()}`);
-const aiPayload = await aiResponse.json();
-const raw = aiPayload.candidates?.[0]?.content?.parts?.map(part => part.text || '').join('').replace(/^```json\s*|\s*```$/g, '').trim();
-if (!raw) throw new Error(`Gemini 응답에 분석 결과가 없습니다: ${JSON.stringify(aiPayload)}`);
-const analysis = JSON.parse(raw);
-
 const requiredCategories = new Set(SECTIONS.map(([section]) => section));
-if (!Array.isArray(analysis.items) || analysis.items.length !== requiredCategories.size) throw new Error('AI 결과가 정확히 8개가 아닙니다.');
 const inputUrls = new Set(articles.map(article => article.url));
-const chosenCategories = new Set();
-const representativeSources = new Set();
-for (const item of analysis.items) {
-  if (!requiredCategories.has(item.category) || chosenCategories.has(item.category)) throw new Error(`분야 누락 또는 중복: ${item.category}`);
-  chosenCategories.add(item.category);
-  if (!item.sourceName || representativeSources.has(item.sourceName)) throw new Error(`대표 언론사 중복: ${item.sourceName}`);
-  representativeSources.add(item.sourceName);
-  if (!Array.isArray(item.sourceUrls) || item.sourceUrls.length < 2 || item.sourceUrls.some(url => !inputUrls.has(url))) throw new Error(`${item.category} 교차검증 URL이 부족하거나 입력에 없습니다.`);
-  if (!Array.isArray(item.sourceNames) || new Set(item.sourceNames).size < 2) throw new Error(`${item.category} 독립 언론사 교차검증이 부족합니다.`);
-  if (!item.title || !item.summary || item.summary.length > 120) throw new Error(`${item.category} 제목 또는 요약 형식이 잘못됐습니다.`);
+
+function validateAnalysis(value) {
+  const errors = [];
+  if (!Array.isArray(value?.items) || value.items.length !== requiredCategories.size) {
+    errors.push(`결과 개수 ${Array.isArray(value?.items) ? value.items.length : 0}개(필수 8개)`);
+    return errors;
+  }
+  const chosenCategories = new Set();
+  const representativeSources = new Set();
+  for (const item of value.items) {
+    if (!requiredCategories.has(item.category) || chosenCategories.has(item.category)) errors.push(`분야 누락 또는 중복: ${item.category}`);
+    chosenCategories.add(item.category);
+    if (!item.sourceName || representativeSources.has(item.sourceName)) errors.push(`대표 언론사 중복: ${item.sourceName}`);
+    representativeSources.add(item.sourceName);
+    if (!Array.isArray(item.sourceUrls) || item.sourceUrls.length < 2 || item.sourceUrls.some(url => !inputUrls.has(url))) errors.push(`${item.category} 교차검증 URL 오류`);
+    if (!Array.isArray(item.sourceNames) || new Set(item.sourceNames).size < 2) errors.push(`${item.category} 독립 언론사 교차검증 부족`);
+    if (!item.title || !item.summary || item.summary.length > 120) errors.push(`${item.category} 제목 또는 요약 형식 오류`);
+  }
+  for (const category of requiredCategories) if (!chosenCategories.has(category)) errors.push(`분야 누락: ${category}`);
+  return [...new Set(errors)];
 }
+
+let analysis;
+let validationErrors = [];
+for (let attempt = 1; attempt <= 3; attempt += 1) {
+  const correction = attempt === 1 ? '' : `\n\n이전 응답은 다음 검증에 실패했다: ${validationErrors.join(' / ')}. 기존 JSON을 그대로 반복하지 말고, 지정된 8개 분야를 정확히 한 개씩 포함한 8개 결과로 다시 작성하라.`;
+  const aiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: '주어진 기사 후보만 근거로 분야·언론사 균형을 지킨 사실 JSON만 출력한다.' }] },
+      contents: [{ role: 'user', parts: [{ text: prompt + correction }] }],
+      generationConfig: { temperature: 0, responseMimeType: 'application/json' },
+    }),
+  });
+  if (!aiResponse.ok) throw new Error(`AI 분석 실패: ${aiResponse.status} ${await aiResponse.text()}`);
+  const aiPayload = await aiResponse.json();
+  const raw = aiPayload.candidates?.[0]?.content?.parts?.map(part => part.text || '').join('').replace(/^```json\s*|\s*```$/g, '').trim();
+  if (!raw) {
+    validationErrors = ['Gemini 응답에 분석 결과가 없음'];
+  } else {
+    try {
+      analysis = JSON.parse(raw);
+      validationErrors = validateAnalysis(analysis);
+    } catch (error) {
+      validationErrors = [`JSON 파싱 오류: ${error.message}`];
+    }
+  }
+  if (validationErrors.length === 0) break;
+  console.warn(`AI 분석 ${attempt}차 검증 실패: ${validationErrors.join(' / ')}`);
+}
+if (validationErrors.length > 0) throw new Error(`AI 결과 검증 3회 실패: ${validationErrors.join(' / ')}`);
 
 analysis.items.sort((a, b) => Number(b.score || 0) - Number(a.score || 0));
 const editionItems = analysis.items.map((item, index) => ({
@@ -197,3 +222,4 @@ await setDocument('auditLogs', `auto-publish-${publishDate}`, {
   createdAt: new Date().toISOString(),
 });
 console.log(`${sourceDate} 전 분야 8개 이슈 분석 완료 → ${visibleAt} 공개 예약`);
+
