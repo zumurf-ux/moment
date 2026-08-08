@@ -8,15 +8,18 @@ export const demoData = {
     {order:6,category:"문화",title:"8월 28일부터 모든 암표 부정거래 금지",summary:"매크로 사용 여부와 관계없이 공연·스포츠 경기 암표 거래가 금지되며, 판매금액의 50배 이하 과징금 근거가 적용됩니다.",sourceName:"대한민국 정책브리핑",sourceUrl:"https://m.korea.kr/news/policyNewsView.do?newsId=148967360",factDate:"2026.08.28 시행"}
   ]}],
   candidates:[
-    {id:"c1",category:"산업",title:"삼성전자 2분기 잠정 영업이익 89.4조원",summary:"2026년 2분기 연결기준 잠정 매출 171조원, 영업이익 89.4조원입니다.",score:96,trustGrade:"A",sourceIds:["samsung"],sourceName:"삼성전자 뉴스룸",sourceUrl:"https://news.samsung.com/kr/%EC%82%BC%EC%84%B1%EC%A0%84%EC%9E%90-2026%EB%85%84-2%EB%B6%84%EA%B8%B0-%EC%9E%A0%EC%A0%95%EC%8B%A4%EC%A0%81-%EB%B0%9C%ED%91%9C",factDate:"2026.07.07 발표"},
-    {id:"c2",category:"경제",title:"6월 소비자물가 3.2% 상승",summary:"재정경제부는 석유제품 최고가격제가 상승률을 0.4%포인트 낮춘 것으로 추정했습니다.",score:94,trustGrade:"A",sourceIds:["policy"],sourceName:"대한민국 정책브리핑",sourceUrl:"https://www.korea.kr/news/policyNewsView.do?newsId=148967512",factDate:"2026.07.02 발표"},
-    {id:"c3",category:"안전",title:"여름철 인명피해 우려지역 9,412곳 관리",summary:"행정안전부는 관리 대상을 448곳 늘리고 재해예방사업 투자를 2조2천억원으로 확대했습니다.",score:92,trustGrade:"A",sourceIds:["mois"],sourceName:"행정안전부",sourceUrl:"https://www.mois.go.kr/frt/bbs/type010/commonSelectBoardArticle.do?bbsId=BBSMSTR_000000000008&nttId=125943",factDate:"2026.05.12 발표"}
-  ],  sources:[
+    {id:"c1",category:"산업",title:"삼성전자 2분기 잠정 영업이익 89.4조원",summary:"2026년 2분기 연결기준 잠정 매출 171조원, 영업이익 89.4조원입니다.",score:96,trustGrade:"A",sourceIds:["bigkinds","samsung"],sourceName:"삼성전자 뉴스룸",sourceUrl:"https://news.samsung.com/kr/%EC%82%BC%EC%84%B1%EC%A0%84%EC%9E%90-2026%EB%85%84-2%EB%B6%84%EA%B8%B0-%EC%9E%A0%EC%A0%95%EC%8B%A4%EC%A0%81-%EB%B0%9C%ED%91%9C",factDate:"2026.07.07 발표"},
+    {id:"c2",category:"경제",title:"6월 소비자물가 3.2% 상승",summary:"재정경제부는 석유제품 최고가격제가 상승률을 0.4%포인트 낮춘 것으로 추정했습니다.",score:94,trustGrade:"A",sourceIds:["bigkinds","policy"],sourceName:"대한민국 정책브리핑",sourceUrl:"https://www.korea.kr/news/policyNewsView.do?newsId=148967512",factDate:"2026.07.02 발표"},
+    {id:"c3",category:"안전",title:"여름철 인명피해 우려지역 9,412곳 관리",summary:"행정안전부는 관리 대상을 448곳 늘리고 재해예방사업 투자를 2조2천억원으로 확대했습니다.",score:92,trustGrade:"A",sourceIds:["bigkinds","mois"],sourceName:"행정안전부",sourceUrl:"https://www.mois.go.kr/frt/bbs/type010/commonSelectBoardArticle.do?bbsId=BBSMSTR_000000000008&nttId=125943",factDate:"2026.05.12 발표"}
+  ],
+  sources:[
+    {id:"bigkinds",name:"빅카인즈 104개 언론사 통합DB",sourceType:"AGGREGATOR",trustLevel:"A",collectionMethod:"SEARCH",active:true,lastStatus:"SUCCESS"},
     {id:"stats",name:"통계청",sourceType:"OFFICIAL",trustLevel:"A",collectionMethod:"API",active:true,lastStatus:"SUCCESS"},
     {id:"weather",name:"기상청",sourceType:"OFFICIAL",trustLevel:"A",collectionMethod:"API",active:true,lastStatus:"SUCCESS"},
     {id:"policy",name:"정책브리핑",sourceType:"OFFICIAL",trustLevel:"A",collectionMethod:"RSS",active:true,lastStatus:"SUCCESS"},
     {id:"samsung",name:"삼성전자 뉴스룸",sourceType:"OFFICIAL",trustLevel:"A",collectionMethod:"RSS",active:true,lastStatus:"SUCCESS"},
-    {id:"mois",name:"행정안전부",sourceType:"OFFICIAL",trustLevel:"A",collectionMethod:"RSS",active:true,lastStatus:"SUCCESS"}
+    {id:"mois",name:"행정안전부",sourceType:"OFFICIAL",trustLevel:"A",collectionMethod:"RSS",active:true,lastStatus:"SUCCESS"},
+    {id:"news",name:"국내 언론사 원문",sourceType:"NEWS",trustLevel:"A",collectionMethod:"SEARCH",active:true,lastStatus:"READY"}
   ],
   auditLogs:[{id:"log-1",action:"system.seeded",entityType:"system",actorEmail:"admin@jamsi.local",createdAt:new Date().toISOString()}],
   config:{adsEnabled:false,maintenanceEnabled:false,maintenanceMessage:"",minimumVersion:"1.0.0"}
