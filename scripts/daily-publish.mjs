@@ -150,7 +150,7 @@ const editionItems = analysis.items.map((item, index) => ({
 const editionId = `daily-${publishDate}-ai-v2`;
 const edition = {
   type: 'daily', publishDate, sourceDate, visibleAt, version: 2, status: 'PUBLISHED',
-  headline: `${Number(sourceDate.slice(5, 7))}월 ${Number(sourceDate.slice(8, 10))}일 가장 영향도가 큰 8가지 사실`,
+  headline: `${Number(sourceDate.slice(5, 7))}월 ${Number(sourceDate.slice(8, 10))}일 핵심 이슈`,
   sourceWindowStart: `${sourceDate}T00:00:00+09:00`, sourceWindowEnd: `${sourceDate}T23:59:59+09:00`,
   items: editionItems,
   sourceCount: new Set(analysis.items.flatMap(item => item.sourceNames)).size,
