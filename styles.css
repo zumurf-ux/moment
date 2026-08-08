@@ -79,3 +79,51 @@
   .reader-body .issue-featured .issue-copy h2{font-size:23px}
   .reader-body .reader-footer{margin:22px 20px 0}
 }
+
+/* 2026-08 overlap-safe single-column redesign */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+.reader-body .user-preview,.reader-body .user-preview *{min-width:0}
+.reader-body .reader-brand{gap:14px;padding:22px 28px 19px}
+.reader-body .reader-brand img{width:68px;height:68px;flex:0 0 68px}
+.reader-body .reader-brand-copy{height:auto;min-height:68px;justify-content:center;gap:5px}
+.reader-body .reader-brand-copy span{font-size:30px}
+.reader-body .reader-brand-copy small{max-width:100%;font-size:11.5px;white-space:normal;overflow-wrap:anywhere}
+.reader-body .edition-lead{padding:23px 28px 27px}
+.reader-body .edition-bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 14px}
+.reader-body #editionDateLine{max-width:100%;overflow-wrap:anywhere}
+.reader-body .issue-list{padding:7px 28px 0}
+.reader-body .issue-item{display:block;padding:24px 2px 27px}
+.reader-body .issue-meta{display:flex;flex-direction:row;align-items:center;flex-wrap:wrap;gap:7px;margin-bottom:11px;padding:0}
+.reader-body .issue-number{display:inline-grid;place-items:center;width:30px;height:30px;border:1px solid rgba(20,53,77,.18);background:#fff;font-size:12px}
+.reader-body .issue-category{max-width:none;padding:5px 8px;white-space:normal}
+.reader-body .issue-focus{padding:5px 8px}
+.reader-body .issue-copy h2{max-width:100%;margin-bottom:9px;overflow-wrap:anywhere;word-break:keep-all}
+.reader-body .issue-copy p{max-width:100%;overflow-wrap:anywhere;word-break:keep-all}
+.reader-body .issue-featured{margin:8px 0 14px;padding:23px 20px 25px;border-top:3px solid var(--reader-navy);border-right:1px solid rgba(20,53,77,.14);border-bottom:1px solid rgba(20,53,77,.22);border-left:4px solid var(--reader-accent);box-shadow:none}
+@media(max-width:600px){
+  .reader-body .reader-brand{gap:11px;padding:17px 18px 15px}
+  .reader-body .reader-brand:after{right:18px;width:38px}
+  .reader-body .reader-brand img{width:62px;height:62px;flex-basis:62px}
+  .reader-body .reader-brand-copy{min-height:62px}
+  .reader-body .reader-brand-copy span{font-size:28px}
+  .reader-body .reader-brand-copy small{font-size:10.5px;line-height:1.35}
+  .reader-body .edition-lead{padding:20px 18px 23px}
+  .reader-body .edition-bar{display:grid;grid-template-columns:minmax(0,1fr);justify-items:start;gap:9px;margin-bottom:19px}
+  .reader-body .issue-count{justify-self:start}
+  .reader-body .edition-lead>h1{font-size:29px;line-height:1.28;overflow-wrap:anywhere;word-break:keep-all}
+  .reader-body .issue-list{padding:4px 18px 0}
+  .reader-body .issue-item{padding:22px 0 24px}
+  .reader-body .issue-meta{margin-bottom:10px}
+  .reader-body .issue-copy h2{font-size:20px;line-height:1.44}
+  .reader-body .issue-copy p{font-size:15px;line-height:1.78}
+  .reader-body .issue-featured{margin:7px 0 13px;padding:21px 16px 23px}
+  .reader-body .issue-featured .issue-copy h2{font-size:22px;line-height:1.4}
+}
+@media(max-width:340px){
+  .reader-body .reader-brand img{width:56px;height:56px;flex-basis:56px}
+  .reader-body .reader-brand-copy{min-height:56px}
+  .reader-body .reader-brand-copy span{font-size:26px}
+  .reader-body .reader-brand-copy small{font-size:10px}
+  .reader-body .edition-lead>h1{font-size:27px}
+  .reader-body .issue-featured{padding-right:13px;padding-left:13px}
+}
