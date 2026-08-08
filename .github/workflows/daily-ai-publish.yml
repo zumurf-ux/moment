@@ -1,0 +1,43 @@
+name: 매일 AI 이슈 분석 및 오전 5시 발행
+
+on:
+  schedule:
+    - cron: '20 19 * * *'
+  workflow_dispatch:
+    inputs:
+      source_date:
+        description: '분석할 한국 날짜(YYYY-MM-DD, 비우면 전날)'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  models: read
+
+concurrency:
+  group: daily-ai-publish
+  cancel-in-progress: false
+
+jobs:
+  analyze-and-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: 저장소 받기
+        uses: actions/checkout@v6
+      - name: 비밀값 확인
+        env:
+          FIREBASE_ADMIN_EMAIL: ${{ secrets.FIREBASE_ADMIN_EMAIL }}
+          FIREBASE_ADMIN_PASSWORD: ${{ secrets.FIREBASE_ADMIN_PASSWORD }}
+        run: |
+          test -n "$FIREBASE_ADMIN_EMAIL" || (echo "FIREBASE_ADMIN_EMAIL 비밀값이 필요합니다." && exit 1)
+          test -n "$FIREBASE_ADMIN_PASSWORD" || (echo "FIREBASE_ADMIN_PASSWORD 비밀값이 필요합니다." && exit 1)
+      - name: 전날 기사 수집·AI 분석·파이어베이스 예약 업로드
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          FIREBASE_API_KEY: AIzaSyBRWlA5RmVNo83hm5QdMwVTieA7RMeQKnk
+          FIREBASE_ADMIN_EMAIL: ${{ secrets.FIREBASE_ADMIN_EMAIL }}
+          FIREBASE_ADMIN_PASSWORD: ${{ secrets.FIREBASE_ADMIN_PASSWORD }}
+          SOURCE_DATE: ${{ inputs.source_date }}
+          AI_MODEL: openai/gpt-4.1
+        run: node scripts/daily-publish.mjs
