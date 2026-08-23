@@ -33,7 +33,7 @@ jobs:
           test -n "$FIREBASE_ADMIN_EMAIL" || (echo "FIREBASE_ADMIN_EMAIL 비밀값이 필요합니다." && exit 1)
           test -n "$FIREBASE_ADMIN_PASSWORD" || (echo "FIREBASE_ADMIN_PASSWORD 비밀값이 필요합니다." && exit 1)
           test -n "$GEMINI_API_KEY" || (echo "GEMINI_API_KEY 비밀값이 필요합니다." && exit 1)
-      - name: 전날 기사 수집·AI 분석·파이어베이스 예약 업로드
+      - name: 전날 공식 공공자료 수집·AI 분석·파이어베이스 예약 업로드
         env:
           FIREBASE_API_KEY: AIzaSyBRWlA5RmVNo83hm5QdMwVTieA7RMeQKnk
           FIREBASE_ADMIN_EMAIL: ${{ secrets.FIREBASE_ADMIN_EMAIL }}

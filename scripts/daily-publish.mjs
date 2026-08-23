@@ -7,15 +7,20 @@ for (const [name, value] of Object.entries({ FIREBASE_API_KEY, FIREBASE_ADMIN_EM
   if (!value) throw new Error(`${name} 환경값이 없습니다.`);
 }
 
-const SECTIONS = [
-  ['정치', ['정치', '국회', '정부 정책']],
-  ['경제', ['경제', '물가 금리', '산업 수출']],
-  ['사회', ['사회', '사건 사고', '노동 교육']],
-  ['국제', ['국제', '외교', '세계']],
-  ['생활·안전', ['날씨 재난', '보건 의료', '교통 주거']],
-  ['과학·기술', ['과학 기술', 'AI 반도체', '우주 연구']],
-  ['문화·예술', ['문화 예술', '영화 음악', '출판 공연']],
-  ['스포츠', ['스포츠', '야구 축구', '올림픽']],
+const TARGET_CATEGORIES = ['정책', '경제·금융', '사회', '국제', '생활·안전', '과학·기술', '문화·예술', '스포츠'];
+
+// 국가기관과 공공기관이 직접 제공하는 공식 RSS만 허용한다.
+// 민간 언론사, 뉴스 집계 서비스, 민간 포털 및 제3자 RSS 중계는 이 목록에 넣지 않는다.
+const OFFICIAL_SOURCES = [
+  { id: 'mois', name: '행정안전부', defaultCategory: '생활·안전', url: 'https://www.mois.go.kr/gpms/view/jsp/rss/rss.jsp?ctxCd=1012', allowedHosts: ['www.mois.go.kr'], license: '국가기관 공공저작물' },
+  { id: 'bok', name: '한국은행', defaultCategory: '경제·금융', url: 'https://www.bok.or.kr/portal/bbs/B0000552/news.rss?menuNo=200690', allowedHosts: ['www.bok.or.kr'], license: '공공기관 공식 RSS' },
+  { id: 'fsc', name: '금융위원회', defaultCategory: '경제·금융', url: 'https://www.fsc.go.kr/about/fsc_bbs_rss/?fid=0111', allowedHosts: ['www.fsc.go.kr', 'fsc.go.kr'], license: '국가기관 공식 RSS·공공저작물 이용조건 확인' },
+  { id: 'msit', name: '과학기술정보통신부', defaultCategory: '과학·기술', url: 'https://www.msit.go.kr/user/rss/rss.do?bbsSeqNo=94', allowedHosts: ['www.msit.go.kr'], license: '국가기관 공공저작물' },
+  { id: 'mcst', name: '문화체육관광부', defaultCategory: '문화·예술', url: 'https://www.mcst.go.kr/common/rss/press.jsp', allowedHosts: ['www.mcst.go.kr', 'mcst.go.kr'], license: '공공누리 제0·1유형 확인 대상' },
+  { id: 'mohw', name: '보건복지부', defaultCategory: '생활·안전', url: 'https://www.mohw.go.kr/rss/board.es?mid=a10503000000&bid=0027&info', allowedHosts: ['www.mohw.go.kr', 'mohw.go.kr'], license: '국가기관 공공저작물' },
+  { id: 'mafra', name: '농림축산식품부', defaultCategory: '생활·안전', url: 'https://www.mafra.go.kr/bbs/home/792/rssList.do?row=50', allowedHosts: ['www.mafra.go.kr', 'mafra.go.kr'], license: '국가기관 공식 RSS·공공저작물 이용조건 확인' },
+  { id: 'molit', name: '국토교통부', defaultCategory: '생활·안전', url: 'https://www.molit.go.kr/dev/board/board_rss.jsp?rss_id=NEWS', allowedHosts: ['www.molit.go.kr', 'molit.go.kr'], license: '국가기관 공공저작물' },
+  { id: 'kma', name: '기상청', defaultCategory: '생활·안전', url: 'https://www.kma.go.kr/servlet/NeoboardProcess?mode=rss&bid=press&url=http%3A%2F%2Fwww.kma.go.kr%2Fnotify%2Fpress%2Fkma_list.jsp', allowedHosts: ['www.kma.go.kr', 'kma.go.kr'], license: '출처표시 조건 공식 RSS' },
 ];
 
 const kstDate = (date = new Date()) => new Intl.DateTimeFormat('en-CA', {
@@ -66,58 +71,6 @@ if (await hasPublishedEditionForDate()) {
   process.exit(0);
 }
 
-const MARKET_URL = 'https://polling.finance.naver.com/api/realtime/domestic/index/KOSPI,KOSDAQ';
-const feedUrl = query => `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=ko&gl=KR&ceid=KR:ko`;
-const feeds = SECTIONS.flatMap(([section, queries]) => queries.map(query => [section, feedUrl(query)]));
-
-async function collectMarketSnapshot() {
-  const response = await fetch(MARKET_URL, { headers: { 'user-agent': 'JamsiDailyBot/2.0' } });
-  if (!response.ok) throw new Error(`국내 증시 지수 수집 실패: ${response.status}`);
-  const payload = await response.json();
-  const byCode = new Map((payload.datas || []).map(item => [item.itemCode, item]));
-  const kospi = byCode.get('KOSPI');
-  const kosdaq = byCode.get('KOSDAQ');
-  if (!kospi || !kosdaq || !kospi.localTradedAt || !kosdaq.localTradedAt) {
-    throw new Error('코스피·코스닥 종가 정보가 완전하지 않아 자동 발행을 중단합니다.');
-  }
-  const tradedDate = String(kospi.localTradedAt).slice(0, 10);
-  if (tradedDate !== String(kosdaq.localTradedAt).slice(0, 10)) {
-    throw new Error('코스피·코스닥 기준일이 서로 달라 자동 발행을 중단합니다.');
-  }
-  const direction = item => item.compareToPreviousPrice?.text || (Number(item.compareToPreviousClosePriceRaw) >= 0 ? '상승' : '하락');
-  const absolute = value => Math.abs(Number(value || 0)).toLocaleString('ko-KR', { maximumFractionDigits: 2 });
-  const isSourceDateTradingDay = tradedDate === sourceDate;
-  return {
-    category: '금융·증시',
-    title: isSourceDateTradingDay
-      ? `코스피 ${kospi.closePrice}·코스닥 ${kosdaq.closePrice}로 마감`
-      : `${Number(sourceDate.slice(5, 7))}월 ${Number(sourceDate.slice(8, 10))}일 국내 증시 휴장`,
-    summary: isSourceDateTradingDay
-      ? `코스피는 전일보다 ${absolute(kospi.compareToPreviousClosePriceRaw)}포인트(${absolute(kospi.fluctuationsRatioRaw)}%) ${direction(kospi)}했고, 코스닥은 ${absolute(kosdaq.compareToPreviousClosePriceRaw)}포인트(${absolute(kosdaq.fluctuationsRatioRaw)}%) ${direction(kosdaq)}했습니다.`
-      : `최근 거래일 ${tradedDate.replaceAll('-', '.')} 종가는 코스피 ${kospi.closePrice}, 코스닥 ${kosdaq.closePrice}였습니다.`,
-    sourceName: '네이버 금융 국내증시',
-    sourceNames: ['네이버 금융 국내증시'],
-    sourceUrl: MARKET_URL,
-    sourceUrls: [MARKET_URL],
-    sourceDate,
-    marketDate: tradedDate,
-    isTradingDay: isSourceDateTradingDay,
-    kospi: {
-      close: kospi.closePrice,
-      change: kospi.compareToPreviousClosePrice,
-      changeRate: kospi.fluctuationsRatio,
-      direction: direction(kospi),
-    },
-    kosdaq: {
-      close: kosdaq.closePrice,
-      change: kosdaq.compareToPreviousClosePrice,
-      changeRate: kosdaq.fluctuationsRatio,
-      direction: direction(kosdaq),
-    },
-  };
-}
-const marketSnapshotPromise = collectMarketSnapshot();
-
 const decodeXml = text => text
   .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
   .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
@@ -125,106 +78,159 @@ const decodeXml = text => text
   .replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 const tag = (xml, name) => decodeXml(xml.match(new RegExp(`<${name}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${name}>`, 'i'))?.[1] || '');
 
-async function collectFeed([section, url]) {
-  const response = await fetch(url, { headers: { 'user-agent': 'JamsiDailyBot/2.0' } });
-  if (!response.ok) throw new Error(`${section} 피드 수집 실패: ${response.status}`);
+const parsePublishedAt = value => {
+  const normalized = String(value || '').replace(/\bKST\b/g, '+0900');
+  const date = new Date(normalized);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const officialItemUrl = (rawUrl, source) => {
+  try {
+    const url = new URL(rawUrl, source.url);
+    return source.allowedHosts.includes(url.hostname.toLowerCase()) ? url.toString() : '';
+  } catch {
+    return '';
+  }
+};
+
+async function collectFeed(source) {
+  const response = await fetch(source.url, { headers: { 'user-agent': 'JamsiOfficialPublicDataBot/1.0' } });
+  if (!response.ok) throw new Error(`${source.name} 공식 피드 수집 실패: ${response.status}`);
   const xml = await response.text();
-  return [...xml.matchAll(/<item>([\s\S]*?)<\/item>/gi)].map(match => {
+  return [...xml.matchAll(/<item(?:\s[^>]*)?>([\s\S]*?)<\/item>/gi)].map((match, index) => {
     const item = match[1];
-    const publishedAt = tag(item, 'pubDate');
-    const sourceMatch = item.match(/<source[^>]*url="([^"]+)"[^>]*>([\s\S]*?)<\/source>/i);
+    const publishedAt = tag(item, 'pubDate') || tag(item, 'dc:date') || tag(item, 'date');
+    const publishedDate = parsePublishedAt(publishedAt);
+    const description = tag(item, 'description') || tag(item, 'content:encoded');
     return {
-      section,
+      id: `${source.id}-${index + 1}`,
+      defaultCategory: source.defaultCategory,
       title: tag(item, 'title'),
-      summary: tag(item, 'description'),
-      url: tag(item, 'link'),
-      sourceName: decodeXml(sourceMatch?.[2] || '언론사'),
+      summary: description.slice(0, 1600),
+      url: officialItemUrl(tag(item, 'link') || tag(item, 'guid'), source),
+      sourceName: source.name,
+      sourceId: source.id,
+      license: source.license,
       publishedAt,
-      sourceDate: publishedAt ? kstDate(new Date(publishedAt)) : '',
+      sourceDate: publishedDate ? kstDate(publishedDate) : '',
     };
   });
 }
 
-const feedResults = await Promise.allSettled(feeds.map(collectFeed));
+const feedResults = await Promise.allSettled(OFFICIAL_SOURCES.map(collectFeed));
+const failedSources = feedResults
+  .map((result, index) => result.status === 'rejected' ? `${OFFICIAL_SOURCES[index].name}: ${result.reason?.message || result.reason}` : null)
+  .filter(Boolean);
+if (failedSources.length) console.warn(`공식 피드 일부 수집 실패: ${failedSources.join(' / ')}`);
+
 const collected = feedResults
   .flatMap(result => result.status === 'fulfilled' ? result.value : [])
   .filter(article => article.sourceDate === sourceDate && article.title && article.url)
   .filter((article, index, array) => array.findIndex(other => other.url === article.url || other.title === article.title) === index);
 
-// 특정 언론사가 후보 목록 자체를 독점하지 못하도록 분야별·언론사별 상한을 둔다.
-const articles = [];
-for (const [section] of SECTIONS) {
-  const counts = new Map();
-  const balanced = collected.filter(article => article.section === section).filter(article => {
-    const count = counts.get(article.sourceName) || 0;
-    if (count >= 4) return false;
-    counts.set(article.sourceName, count + 1);
-    return true;
-  }).slice(0, 36);
-  if (balanced.length < 4) throw new Error(`${sourceDate} ${section} 후보가 ${balanced.length}개뿐이어서 자동 발행을 중단합니다.`);
-  articles.push(...balanced);
+// 한 기관이 후보 전체를 독점하지 않도록 기관별 상한을 둔다.
+const counts = new Map();
+const articles = collected.filter(article => {
+  const count = counts.get(article.sourceId) || 0;
+  if (count >= 12) return false;
+  counts.set(article.sourceId, count + 1);
+  return true;
+}).slice(0, 80);
+
+if (articles.length < 4) {
+  throw new Error(`${sourceDate} 국가·공공기관 공식 자료가 ${articles.length}개뿐이어서 자동 발행을 중단합니다.`);
 }
 
-const prompt = `당신은 한국어 일간 브리핑 '잠시'의 사실검증 편집 AI다. 입력은 ${sourceDate} 00:00~23:59(KST)에 발행된 기사 후보뿐이다.
+const prompt = `당신은 한국어 일간 브리핑 '잠시'의 공공정보 편집 AI다. 입력은 ${sourceDate} 00:00~23:59(KST)에 국가기관·공공기관이 직접 공개한 공식 자료뿐이다.
 
-목표는 기사 수가 많은 언론사를 따라가는 것이 아니라, 전체 분야와 여러 언론사를 대조해 그날 국민에게 영향이 큰 사실을 고르는 것이다.
+목표는 공식 자료에서 국민에게 실제 영향이 큰 확정 사실을 골라 짧고 독립적인 문장으로 새로 작성하는 것이다.
 
 편집 규칙:
-1. 정치·경제·사회·국제·생활·안전·과학·기술·문화·예술·스포츠를 빠짐없이 검토한다.
-2. 결과는 정확히 8개이며 정치, 경제, 사회, 국제, 생활·안전, 과학·기술, 문화·예술, 스포츠에서 각 1개를 고른다.
-3. 8개 결과의 대표 sourceName은 모두 달라야 한다. 같은 언론사를 두 번 대표 출처로 쓰지 않는다.
-4. 같은 사건을 다룬 독립 언론사 기사 2개 이상이 입력에 있을 때만 선정한다. sourceNames와 sourceUrls에 교차 확인한 출처를 2개 이상 기록한다.
-5. 8개를 먼저 분야별 영향도 순으로 비교한 뒤, 국민 영향도 30%·안전성 25%·최신성 25%·출처 검증도 20%로 전체 순위를 정한다. 1번이 그날의 메인 이슈다.
-6. 정치에서는 좌우 평가, 정당 유불리, 감정적 표현, 전망을 쓰지 않는다. 의결·발표·수치·일정처럼 확인된 사실만 쓴다.
-7. 인물이나 단체의 비난·공방·주장·평가만 있는 기사는 선정하지 않는다. '빌런·조롱·전격·실책·책임론·강력히' 같은 감정적 단어를 제목과 요약에 쓰지 않는다.
-8. 경제는 물가·금리·고용·무역·산업·가계처럼 확인된 지표나 시행된 정책을 고른다. 정치인의 경제 인사 비난이나 경질 요구를 경제 이슈로 분류하지 않는다.
-9. 지역 행사나 단순 계획 착수보다 전국 단위 제도 변화, 다수 국민의 안전·생활·경제에 영향을 준 확정 사실을 우선한다.
-10. 제목은 구체적인 주어와 확정된 결과를 담고, 요약은 휴대전화 한 페이지에 맞게 2문장·120자 이내로 쓴다.
-11. 입력에 없는 사실이나 URL을 만들지 않는다.
+1. 결과는 4~8개다. 자료가 없는 분야를 억지로 채우지 말고 정책, 경제·금융, 사회, 국제, 생활·안전, 과학·기술, 문화·예술, 스포츠를 가능한 고르게 검토한다.
+2. 국민 영향도 30%·안전성 25%·최신성 25%·검증도 20%로 정렬하며 1번이 메인 이슈다.
+3. 보도자료의 홍보성 표현, 장관 발언, 전망, 평가, 구호는 제거하고 시행·발표·수치·일정·경보·의결처럼 확인된 사실만 쓴다.
+4. 원자료 제목과 설명의 문장, 어순, 표현을 복사하거나 일부 단어만 바꿔 쓰지 않는다. 주체·행위·날짜·수치의 사실요소만 추출한 뒤 완전히 새로운 문장으로 작성한다.
+5. 직접 인용, 따옴표 인용, 사진·도표·그래픽 설명은 사용하지 않는다.
+6. 제목은 구체적인 주어와 확정된 결과를 담고, 요약은 2문장·120자 이내로 쓴다.
+7. 같은 사건의 공식 자료가 여러 개면 sourceIds에 함께 기록하고, 하나뿐이면 해당 공식 원자료 하나만 기록한다.
+8. 입력에 없는 사실·기관·식별자를 만들지 않는다.
 
 JSON만 출력한다.
-{"items":[{"category":"지정된 8개 분야 중 하나","title":"구체적 사실 제목","summary":"120자 이내 사실 요약","sourceName":"대표 언론사","sourceNames":["교차확인 언론사1","교차확인 언론사2"],"sourceUrls":["입력 URL1","입력 URL2"],"score":0,"reason":"선정 근거","factors":{"freshness":0,"impact":0,"safety":0,"verification":0}}]}
+{"items":[{"category":"지정된 분야 중 하나","title":"새로 작성한 구체적 사실 제목","summary":"120자 이내 독립 작성 요약","sourceIds":["입력 id"],"score":0,"reason":"선정 근거","factors":{"freshness":0,"impact":0,"safety":0,"verification":0}}]}
 
-기사 후보: ${JSON.stringify(articles)}`;
+공식 자료 후보: ${JSON.stringify(articles)}`;
 
-const requiredCategories = new Set(SECTIONS.map(([section]) => section));
-const inputUrls = new Set(articles.map(article => article.url));
+const allowedCategories = new Set(TARGET_CATEGORIES);
+const articleById = new Map(articles.map(article => [article.id, article]));
 const neutralityBlocklist = /빌런|조롱|전격|실책|책임론|강력히|망언|폭언|굴욕|참사 정권|무능 정권/;
+
+const compactText = value => String(value || '').replace(/[^0-9A-Za-z가-힣]/g, '').toLowerCase();
+const longestCommonRun = (left, right) => {
+  const a = compactText(left);
+  const b = compactText(right);
+  const previous = new Uint16Array(b.length + 1);
+  let longest = 0;
+  for (let i = 1; i <= a.length; i += 1) {
+    let diagonal = 0;
+    for (let j = 1; j <= b.length; j += 1) {
+      const saved = previous[j];
+      previous[j] = a[i - 1] === b[j - 1] ? diagonal + 1 : 0;
+      if (previous[j] > longest) longest = previous[j];
+      diagonal = saved;
+    }
+  }
+  return longest;
+};
+
+const copiesSourceExpression = (generated, sourceText) => {
+  const generatedCompact = compactText(generated);
+  const sourceCompact = compactText(sourceText);
+  if (!generatedCompact || !sourceCompact) return false;
+  if (generatedCompact === sourceCompact) return true;
+  const threshold = Math.max(14, Math.min(24, Math.floor(generatedCompact.length * 0.8)));
+  return longestCommonRun(generated, sourceText) >= threshold;
+};
 
 function validateAnalysis(value) {
   const errors = [];
-  if (!Array.isArray(value?.items) || value.items.length !== requiredCategories.size) {
-    errors.push(`결과 개수 ${Array.isArray(value?.items) ? value.items.length : 0}개(필수 8개)`);
+  if (!Array.isArray(value?.items) || value.items.length < 4 || value.items.length > 8) {
+    errors.push(`결과 개수 ${Array.isArray(value?.items) ? value.items.length : 0}개(허용 4~8개)`);
     return errors;
   }
-  const chosenCategories = new Set();
-  const representativeSources = new Set();
+  const usedDocumentIds = new Set();
   for (const item of value.items) {
-    if (!requiredCategories.has(item.category) || chosenCategories.has(item.category)) errors.push(`분야 누락 또는 중복: ${item.category}`);
-    chosenCategories.add(item.category);
-    if (!item.sourceName || representativeSources.has(item.sourceName)) errors.push(`대표 언론사 중복: ${item.sourceName}`);
-    representativeSources.add(item.sourceName);
-    if (!Array.isArray(item.sourceUrls) || item.sourceUrls.length < 2 || item.sourceUrls.some(url => !inputUrls.has(url))) errors.push(`${item.category} 교차검증 URL 오류`);
-    if (!Array.isArray(item.sourceNames) || new Set(item.sourceNames).size < 2) errors.push(`${item.category} 독립 언론사 교차검증 부족`);
+    if (!allowedCategories.has(item.category)) errors.push(`허용되지 않은 분야: ${item.category}`);
+    if (!Array.isArray(item.sourceIds) || item.sourceIds.length < 1 || item.sourceIds.some(id => !articleById.has(id))) {
+      errors.push(`${item.category} 공식 자료 식별자 오류`);
+      continue;
+    }
+    const sourceDocuments = item.sourceIds.map(id => articleById.get(id));
+    if (item.sourceIds.some(id => usedDocumentIds.has(id))) errors.push(`${item.category} 동일 공식 자료 중복 사용`);
+    item.sourceIds.forEach(id => usedDocumentIds.add(id));
     if (!item.title || !item.summary || item.summary.length > 120) errors.push(`${item.category} 제목 또는 요약 형식 오류`);
     if (neutralityBlocklist.test(`${item.title} ${item.summary}`)) errors.push(`${item.category} 감정·논평 표현 포함`);
-    if (item.category === '경제' && /경질|사퇴|해임|비난|공방|의원.*요구/.test(`${item.title} ${item.summary}`)) {
-      errors.push('경제 분야에 정치권 비난·인사 요구가 포함됨');
+    if (/경질|사퇴|해임|비난|공방|의원.*요구/.test(`${item.title} ${item.summary}`)) {
+      errors.push(`${item.category}에 주장·공방 표현 포함`);
+    }
+    for (const sourceDocument of sourceDocuments) {
+      if (copiesSourceExpression(item.title, sourceDocument.title)
+        || copiesSourceExpression(item.summary, sourceDocument.summary)) {
+        errors.push(`${item.category} 원자료 표현과 지나치게 유사함`);
+      }
     }
   }
-  for (const category of requiredCategories) if (!chosenCategories.has(category)) errors.push(`분야 누락: ${category}`);
   return [...new Set(errors)];
 }
 
 let analysis;
 let validationErrors = [];
 for (let attempt = 1; attempt <= 3; attempt += 1) {
-  const correction = attempt === 1 ? '' : `\n\n이전 응답은 다음 검증에 실패했다: ${validationErrors.join(' / ')}. 기존 JSON을 그대로 반복하지 말고, 지정된 8개 분야를 정확히 한 개씩 포함한 8개 결과로 다시 작성하고, 발언·비난·공방이 아니라 전국적 영향이 큰 확정 사실을 고르라.`;
+  const correction = attempt === 1 ? '' : `\n\n이전 응답은 다음 검증에 실패했다: ${validationErrors.join(' / ')}. 원자료의 제목·설명 표현을 반복하지 말고 사실요소만 이용해 완전히 새로운 문장으로 4~8개를 다시 작성하라.`;
   const aiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
-      systemInstruction: { parts: [{ text: '주어진 기사 후보만 근거로 분야·언론사 균형을 지킨 사실 JSON만 출력한다.' }] },
+      systemInstruction: { parts: [{ text: '국가·공공기관 공식 자료의 사실요소만 근거로 삼고 원자료 표현을 복제하지 않은 한국어 사실 JSON만 출력한다.' }] },
       contents: [{ role: 'user', parts: [{ text: prompt + correction }] }],
       generationConfig: { temperature: 0, responseMimeType: 'application/json' },
     }),
@@ -255,8 +261,17 @@ for (let attempt = 1; attempt <= 3; attempt += 1) {
 }
 if (validationErrors.length > 0) throw new Error(`AI 결과 검증 3회 실패: ${validationErrors.join(' / ')}`);
 
+analysis.items = analysis.items.map(item => {
+  const sourceDocuments = item.sourceIds.map(id => articleById.get(id));
+  return {
+    ...item,
+    sourceNames: [...new Set(sourceDocuments.map(document => document.sourceName))],
+    sourceUrls: [...new Set(sourceDocuments.map(document => document.url))],
+    sourceLicenses: [...new Set(sourceDocuments.map(document => document.license))],
+  };
+});
 analysis.items.sort((a, b) => Number(b.score || 0) - Number(a.score || 0));
-const marketSnapshot = await marketSnapshotPromise;
+
 const editionItems = analysis.items.map((item, index) => ({
   order: index + 1,
   category: item.category,
@@ -265,37 +280,28 @@ const editionItems = analysis.items.map((item, index) => ({
   sourceName: item.sourceNames.join(' · '),
   sourceUrl: '',
   sourceNames: item.sourceNames,
+  sourceUrls: item.sourceUrls,
+  sourceLicenses: item.sourceLicenses,
   factDate: sourceDate.replaceAll('-', '.'),
   sourceDate,
   isHot: index === 0,
   selectionScore: Number(item.score || 0),
   selectionReason: item.reason,
 }));
-const economyIndex = editionItems.findIndex(item => item.category === '경제');
-editionItems.splice(economyIndex >= 0 ? economyIndex + 1 : 1, 0, {
-  order: 0,
-  ...marketSnapshot,
-  factDate: sourceDate.replaceAll('-', '.'),
-  isHot: false,
-  selectionScore: 0,
-  selectionReason: marketSnapshot.isTradingDay ? '국내 증시 거래일 종가 자동 수집' : '휴장일과 최근 거래일 종가 자동 확인',
-});
-editionItems.forEach((item, index) => { item.order = index + 1; });
-const editionId = `daily-${publishDate}-ai-v3`;
+const editionId = `daily-${publishDate}-official-v4`;
 const edition = {
-  type: 'daily', publishDate, sourceDate, visibleAt, version: 3, status: 'PUBLISHED',
+  type: 'daily', publishDate, sourceDate, visibleAt, version: 4, status: 'PUBLISHED',
   headline: `${Number(sourceDate.slice(5, 7))}월 ${Number(sourceDate.slice(8, 10))}일 핵심 이슈`,
   sourceWindowStart: `${sourceDate}T00:00:00+09:00`, sourceWindowEnd: `${sourceDate}T23:59:59+09:00`,
   items: editionItems,
-  sourceCount: new Set([...analysis.items.flatMap(item => item.sourceNames), marketSnapshot.sourceName]).size,
+  sourceCount: new Set(analysis.items.flatMap(item => item.sourceNames)).size,
   reviewedAt: new Date().toISOString(),
-  reviewMode: 'AI 분야 균형·언론사 분산·복수 출처 교차검증·국내 증시 종가 자동 수집',
+  reviewMode: '국가·공공기관 직접 제공 자료만 수집·원문 표현 유사도 차단·AI 사실요소 재작성',
   politicalToneEnabled: false,
-  selectionModel: `GitHub Models ${MODEL}`,
-  selectionFactors: '8개 이슈 분야별 1개·금융·증시 별도 제공·코스피·코스닥 종가 검증·대표 언론사 중복 금지·최신성 25%·국민 영향도 30%·안전성 25%·출처 검증도 20%',
+  privateMediaExcluded: true,
+  selectionModel: `Gemini ${MODEL}`,
+  selectionFactors: '국가·공공기관 공식 자료만 사용·민간 언론·포털 제외·원자료 표현 복제 차단·최신성 25%·국민 영향도 30%·안전성 25%·검증도 20%',
 };
-
-
 
 function firestoreValue(value) {
   if (value === null || value === undefined) return { nullValue: null };
@@ -317,24 +323,19 @@ async function setDocument(collectionName, id, data) {
 await setDocument('editions', editionId, edition);
 await Promise.all(analysis.items.map((item, index) => setDocument('candidates', `${sourceDate}-${index + 1}`, {
   category: item.category, title: item.title, summary: item.summary,
-  sourceName: item.sourceName, sourceNames: item.sourceNames, sourceUrls: item.sourceUrls,
+  sourceName: item.sourceNames.join(' · '), sourceNames: item.sourceNames, sourceUrls: item.sourceUrls,
   sourceUrl: item.sourceUrls[0], factDate: sourceDate.replaceAll('-', '.'), sourceDate,
-  verified: true, trustGrade: 'A', sourceIds: ['google-news', ...item.sourceNames],
+  sourceLicenses: item.sourceLicenses,
+  verified: true, trustGrade: 'A', sourceIds: item.sourceIds,
   analysisFactors: item.factors, analysisScore: Number(item.score || 0), analysisRank: index + 1,
   analysisReason: item.reason, analyzedAt: new Date().toISOString(),
 })));
-await setDocument('candidates', `${sourceDate}-market`, {
-  ...marketSnapshot,
-  verified: true,
-  trustGrade: 'A',
-  sourceIds: ['naver-finance-market'],
-  analyzedAt: new Date().toISOString(),
-});
 await setDocument('auditLogs', `auto-publish-${publishDate}`, {
   action: 'daily.auto_published', entityType: 'editions', entityId: editionId,
   actorEmail: 'github-actions@jamsi', sourceDate, publishDate, visibleAt, model: MODEL,
-  categoryCoverage: [...requiredCategories, '금융·증시'], representativeSourceCount: new Set(analysis.items.map(item => item.sourceName)).size,
+  categoryCoverage: [...new Set(analysis.items.map(item => item.category))],
+  representativeSourceCount: new Set(analysis.items.flatMap(item => item.sourceNames)).size,
+  privateMediaExcluded: true,
   createdAt: new Date().toISOString(),
 });
-console.log(`${sourceDate} 전 분야 8개 이슈와 코스피·코스닥 금융 정보 분석 완료 → ${visibleAt} 공개 예약`);
-
+console.log(`${sourceDate} 국가·공공기관 공식 자료 ${analysis.items.length}개 이슈 분석 완료 → ${visibleAt} 공개 예약`);

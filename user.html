@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#ffffff">
   <title>잠시</title>
-  <link rel="stylesheet" href="./styles.css?v=21">
+  <link rel="stylesheet" href="./styles.css?v=22">
 </head>
 <body class="reader-body">
   <main class="user-preview">
@@ -45,6 +45,7 @@
           <span class="eyebrow">${String(index + 1).padStart(2, '0')} · ${escapeHtml(item.category)}</span>
           <h2>${escapeHtml(item.title)}</h2>
           <p>${escapeHtml(item.summary)}</p>
+          ${item.sourceName ? `<small class="fact-source">자료 · ${escapeHtml(item.sourceName)}</small>` : ''}
         </article>
       `).join('');
     }
