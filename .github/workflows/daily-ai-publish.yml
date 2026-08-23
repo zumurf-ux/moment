@@ -40,5 +40,5 @@ jobs:
           FIREBASE_ADMIN_PASSWORD: ${{ secrets.FIREBASE_ADMIN_PASSWORD }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           SOURCE_DATE: ${{ inputs.source_date }}
-          AI_MODEL: gemini-3.1-flash-lite
+          AI_MODEL: gemini-2.5-flash-lite
         run: node scripts/daily-publish.mjs

@@ -9,7 +9,7 @@ const PROJECT_ID = 'moment-jamsi';
 const DATABASE_ID = '(default)';
 const { FIREBASE_API_KEY, FIREBASE_ADMIN_EMAIL, FIREBASE_ADMIN_PASSWORD, GEMINI_API_KEY } = process.env;
 const MODEL = process.env.AI_MODEL || 'gemini-3.1-flash-lite';
-const MODEL_CANDIDATES = [...new Set([MODEL, 'gemini-2.5-flash-lite'])];
+const MODEL_CANDIDATES = [...new Set([MODEL, 'gemini-2.5-flash-lite', 'gemini-3.1-flash-lite'])];
 const wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 
 for (const [name, value] of Object.entries({ FIREBASE_API_KEY, FIREBASE_ADMIN_EMAIL, FIREBASE_ADMIN_PASSWORD, GEMINI_API_KEY })) {
