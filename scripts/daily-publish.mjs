@@ -2,6 +2,7 @@ const PROJECT_ID = 'moment-jamsi';
 const DATABASE_ID = '(default)';
 const { FIREBASE_API_KEY, FIREBASE_ADMIN_EMAIL, FIREBASE_ADMIN_PASSWORD, GEMINI_API_KEY } = process.env;
 const MODEL = process.env.AI_MODEL || 'gemini-3.1-flash-lite';
+const MODEL_CANDIDATES = [...new Set([MODEL, 'gemini-2.5-flash-lite'])];
 
 for (const [name, value] of Object.entries({ FIREBASE_API_KEY, FIREBASE_ADMIN_EMAIL, FIREBASE_ADMIN_PASSWORD, GEMINI_API_KEY })) {
   if (!value) throw new Error(`${name} 환경값이 없습니다.`);
@@ -163,6 +164,44 @@ JSON만 출력한다.
 const allowedCategories = new Set(TARGET_CATEGORIES);
 const articleById = new Map(articles.map(article => [article.id, article]));
 const neutralityBlocklist = /빌런|조롱|전격|실책|책임론|강력히|망언|폭언|굴욕|참사 정권|무능 정권/;
+const transientAiStatuses = new Set([429, 500, 502, 503, 504]);
+const wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
+
+async function requestAi(body) {
+  let lastError;
+  for (const model of MODEL_CANDIDATES) {
+    for (let retry = 0; retry < 2; retry += 1) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 90_000);
+      try {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        });
+        if (response.ok) return { response, model };
+        const detail = await response.text();
+        lastError = new Error(`AI 분석 실패(${model}): ${response.status} ${detail}`);
+        if (!transientAiStatuses.has(response.status)) {
+          lastError.retryable = false;
+          throw lastError;
+        }
+      } catch (error) {
+        if (error?.retryable === false) throw error;
+        lastError = error?.name === 'AbortError'
+          ? new Error(`AI 분석 시간 초과(${model}): 90초`)
+          : error;
+      } finally {
+        clearTimeout(timeout);
+      }
+      console.warn(`${model} 일시 오류 · ${retry + 1}차 요청 실패, 재시도합니다.`);
+      await wait(5_000 * (2 ** retry));
+    }
+    console.warn(`${model} 응답이 불안정해 다음 공식 지원 모델로 전환합니다.`);
+  }
+  throw lastError || new Error('AI 분석 요청에 실패했습니다.');
+}
 
 const compactText = value => String(value || '').replace(/[^0-9A-Za-z가-힣]/g, '').toLowerCase();
 const longestCommonRun = (left, right) => {
@@ -224,18 +263,16 @@ function validateAnalysis(value) {
 
 let analysis;
 let validationErrors = [];
+let modelUsed = MODEL;
 for (let attempt = 1; attempt <= 3; attempt += 1) {
   const correction = attempt === 1 ? '' : `\n\n이전 응답은 다음 검증에 실패했다: ${validationErrors.join(' / ')}. 원자료의 제목·설명 표현을 반복하지 말고 사실요소만 이용해 완전히 새로운 문장으로 4~8개를 다시 작성하라.`;
-  const aiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: '국가·공공기관 공식 자료의 사실요소만 근거로 삼고 원자료 표현을 복제하지 않은 한국어 사실 JSON만 출력한다.' }] },
-      contents: [{ role: 'user', parts: [{ text: prompt + correction }] }],
-      generationConfig: { temperature: 0, responseMimeType: 'application/json' },
-    }),
+  const aiRequest = await requestAi({
+    systemInstruction: { parts: [{ text: '국가·공공기관 공식 자료의 사실요소만 근거로 삼고 원자료 표현을 복제하지 않은 한국어 사실 JSON만 출력한다.' }] },
+    contents: [{ role: 'user', parts: [{ text: prompt + correction }] }],
+    generationConfig: { temperature: 0, responseMimeType: 'application/json' },
   });
-  if (!aiResponse.ok) throw new Error(`AI 분석 실패: ${aiResponse.status} ${await aiResponse.text()}`);
+  const { response: aiResponse, model } = aiRequest;
+  modelUsed = model;
   const aiPayload = await aiResponse.json();
   const raw = aiPayload.candidates?.[0]?.content?.parts?.map(part => part.text || '').join('').replace(/^```json\s*|\s*```$/g, '').trim();
   if (!raw) {
@@ -299,7 +336,7 @@ const edition = {
   reviewMode: '국가·공공기관 직접 제공 자료만 수집·원문 표현 유사도 차단·AI 사실요소 재작성',
   politicalToneEnabled: false,
   privateMediaExcluded: true,
-  selectionModel: `Gemini ${MODEL}`,
+  selectionModel: `Gemini ${modelUsed}`,
   selectionFactors: '국가·공공기관 공식 자료만 사용·민간 언론·포털 제외·원자료 표현 복제 차단·최신성 25%·국민 영향도 30%·안전성 25%·검증도 20%',
 };
 
@@ -332,7 +369,7 @@ await Promise.all(analysis.items.map((item, index) => setDocument('candidates', 
 })));
 await setDocument('auditLogs', `auto-publish-${publishDate}`, {
   action: 'daily.auto_published', entityType: 'editions', entityId: editionId,
-  actorEmail: 'github-actions@jamsi', sourceDate, publishDate, visibleAt, model: MODEL,
+  actorEmail: 'github-actions@jamsi', sourceDate, publishDate, visibleAt, model: modelUsed,
   categoryCoverage: [...new Set(analysis.items.map(item => item.category))],
   representativeSourceCount: new Set(analysis.items.flatMap(item => item.sourceNames)).size,
   privateMediaExcluded: true,
