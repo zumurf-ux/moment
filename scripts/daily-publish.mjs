@@ -9,7 +9,7 @@ const PROJECT_ID = 'moment-jamsi';
 const DATABASE_ID = '(default)';
 const { FIREBASE_API_KEY, FIREBASE_ADMIN_EMAIL, FIREBASE_ADMIN_PASSWORD, GEMINI_API_KEY } = process.env;
 const MODEL = process.env.AI_MODEL || 'gemini-3.1-flash-lite';
-const MODEL_CANDIDATES = [...new Set([MODEL, 'gemini-2.5-flash-lite', 'gemini-3.1-flash-lite'])];
+const MODEL_CANDIDATES = [...new Set([MODEL, 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'])];
 const wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 
 for (const [name, value] of Object.entries({ FIREBASE_API_KEY, FIREBASE_ADMIN_EMAIL, FIREBASE_ADMIN_PASSWORD, GEMINI_API_KEY })) {
@@ -229,6 +229,10 @@ async function requestAi(body) {
         if (response.ok) return { response, model };
         const detail = await response.text();
         lastError = new Error(`AI 분석 실패(${model}): ${response.status} ${detail}`);
+        if (response.status === 404) {
+          console.warn(`${model}을 현재 계정에서 사용할 수 없어 다음 공식 지원 모델로 전환합니다.`);
+          break;
+        }
         if (!transientAiStatuses.has(response.status)) {
           lastError.retryable = false;
           throw lastError;
