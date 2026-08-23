@@ -1,8 +1,16 @@
+import dns from 'node:dns';
+import { execFile as execFileCallback } from 'node:child_process';
+import { promisify } from 'node:util';
+
+dns.setDefaultResultOrder('ipv4first');
+const execFile = promisify(execFileCallback);
+
 const PROJECT_ID = 'moment-jamsi';
 const DATABASE_ID = '(default)';
 const { FIREBASE_API_KEY, FIREBASE_ADMIN_EMAIL, FIREBASE_ADMIN_PASSWORD, GEMINI_API_KEY } = process.env;
 const MODEL = process.env.AI_MODEL || 'gemini-3.1-flash-lite';
 const MODEL_CANDIDATES = [...new Set([MODEL, 'gemini-2.5-flash-lite'])];
+const wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 
 for (const [name, value] of Object.entries({ FIREBASE_API_KEY, FIREBASE_ADMIN_EMAIL, FIREBASE_ADMIN_PASSWORD, GEMINI_API_KEY })) {
   if (!value) throw new Error(`${name} 환경값이 없습니다.`);
@@ -95,9 +103,41 @@ const officialItemUrl = (rawUrl, source) => {
 };
 
 async function collectFeed(source) {
-  const response = await fetch(source.url, { headers: { 'user-agent': 'JamsiOfficialPublicDataBot/1.0' } });
-  if (!response.ok) throw new Error(`${source.name} 공식 피드 수집 실패: ${response.status}`);
-  const xml = await response.text();
+  const headers = {
+    accept: 'application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.5',
+    'accept-language': 'ko-KR,ko;q=0.9',
+    'user-agent': 'Mozilla/5.0 (compatible; JamsiOfficialPublicDataBot/1.0; +https://zumurf-ux.github.io/moment/)',
+  };
+  let xml = '';
+  let lastError;
+  for (let attempt = 0; attempt < 3 && !xml; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30_000);
+    try {
+      const response = await fetch(source.url, { headers, signal: controller.signal });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      xml = await response.text();
+    } catch (error) {
+      const cause = error?.cause?.code || error?.cause?.message || error?.message || String(error);
+      lastError = new Error(`${source.name} Node 수집 실패: ${cause}`);
+      if (attempt < 2) await wait(1_500 * (2 ** attempt));
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+  if (!xml) {
+    try {
+      const { stdout } = await execFile('curl', [
+        '--fail', '--silent', '--show-error', '--location', '--max-time', '45',
+        '--retry', '2', '--retry-delay', '2', '--retry-all-errors',
+        '--user-agent', headers['user-agent'], '--header', `Accept: ${headers.accept}`, source.url,
+      ], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 });
+      xml = stdout;
+    } catch (error) {
+      throw new Error(`${lastError?.message || `${source.name} Node 수집 실패`} / curl 수집 실패: ${error?.message || error}`);
+    }
+  }
+  if (!/<(?:rss|rdf:RDF|feed)\b/i.test(xml)) throw new Error(`${source.name} 응답이 공식 RSS 형식이 아닙니다.`);
   return [...xml.matchAll(/<item(?:\s[^>]*)?>([\s\S]*?)<\/item>/gi)].map((match, index) => {
     const item = match[1];
     const publishedAt = tag(item, 'pubDate') || tag(item, 'dc:date') || tag(item, 'date');
@@ -118,7 +158,16 @@ async function collectFeed(source) {
   });
 }
 
-const feedResults = await Promise.allSettled(OFFICIAL_SOURCES.map(collectFeed));
+// 국내 정부 누리집의 연결 제한을 피하기 위해 공식 피드를 한 번에 하나씩 수집한다.
+const feedResults = [];
+for (const source of OFFICIAL_SOURCES) {
+  try {
+    feedResults.push({ status: 'fulfilled', value: await collectFeed(source) });
+  } catch (reason) {
+    feedResults.push({ status: 'rejected', reason });
+  }
+  await wait(500);
+}
 const failedSources = feedResults
   .map((result, index) => result.status === 'rejected' ? `${OFFICIAL_SOURCES[index].name}: ${result.reason?.message || result.reason}` : null)
   .filter(Boolean);
@@ -165,8 +214,6 @@ const allowedCategories = new Set(TARGET_CATEGORIES);
 const articleById = new Map(articles.map(article => [article.id, article]));
 const neutralityBlocklist = /빌런|조롱|전격|실책|책임론|강력히|망언|폭언|굴욕|참사 정권|무능 정권/;
 const transientAiStatuses = new Set([429, 500, 502, 503, 504]);
-const wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
-
 async function requestAi(body) {
   let lastError;
   for (const model of MODEL_CANDIDATES) {
