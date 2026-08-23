@@ -28,7 +28,6 @@ const OFFICIAL_SOURCES = [
   { id: 'mcst', name: '문화체육관광부', defaultCategory: '문화·예술', url: 'https://www.mcst.go.kr/common/rss/press.jsp', allowedHosts: ['www.mcst.go.kr', 'mcst.go.kr'], license: '공공누리 제0·1유형 확인 대상' },
   { id: 'mohw', name: '보건복지부', defaultCategory: '생활·안전', url: 'https://www.mohw.go.kr/rss/board.es?mid=a10503000000&bid=0027&info', allowedHosts: ['www.mohw.go.kr', 'mohw.go.kr'], license: '국가기관 공공저작물' },
   { id: 'mafra', name: '농림축산식품부', defaultCategory: '생활·안전', url: 'https://www.mafra.go.kr/bbs/home/792/rssList.do?row=50', allowedHosts: ['www.mafra.go.kr', 'mafra.go.kr'], license: '국가기관 공식 RSS·공공저작물 이용조건 확인' },
-  { id: 'molit', name: '국토교통부', defaultCategory: '생활·안전', url: 'https://www.molit.go.kr/dev/board/board_rss.jsp?rss_id=NEWS', allowedHosts: ['www.molit.go.kr', 'molit.go.kr'], license: '국가기관 공공저작물' },
   { id: 'kma', name: '기상청', defaultCategory: '생활·안전', url: 'https://www.kma.go.kr/servlet/NeoboardProcess?mode=rss&bid=press&url=http%3A%2F%2Fwww.kma.go.kr%2Fnotify%2Fpress%2Fkma_list.jsp', allowedHosts: ['www.kma.go.kr', 'kma.go.kr'], license: '출처표시 조건 공식 RSS' },
 ];
 
@@ -187,7 +186,7 @@ const articles = collected.filter(article => {
   return true;
 }).slice(0, 80);
 
-if (articles.length < 4) {
+if (articles.length < 3) {
   throw new Error(`${sourceDate} 국가·공공기관 공식 자료가 ${articles.length}개뿐이어서 자동 발행을 중단합니다.`);
 }
 
@@ -196,7 +195,7 @@ const prompt = `당신은 한국어 일간 브리핑 '잠시'의 공공정보 �
 목표는 공식 자료에서 국민에게 실제 영향이 큰 확정 사실을 골라 짧고 독립적인 문장으로 새로 작성하는 것이다.
 
 편집 규칙:
-1. 결과는 4~8개다. 자료가 없는 분야를 억지로 채우지 말고 정책, 경제·금융, 사회, 국제, 생활·안전, 과학·기술, 문화·예술, 스포츠를 가능한 고르게 검토한다.
+1. 결과는 3~8개다. 자료가 없는 분야를 억지로 채우지 말고 정책, 경제·금융, 사회, 국제, 생활·안전, 과학·기술, 문화·예술, 스포츠를 가능한 고르게 검토한다.
 2. 국민 영향도 30%·안전성 25%·최신성 25%·검증도 20%로 정렬하며 1번이 메인 이슈다.
 3. 보도자료의 홍보성 표현, 장관 발언, 전망, 평가, 구호는 제거하고 시행·발표·수치·일정·경보·의결처럼 확인된 사실만 쓴다.
 4. 원자료 제목과 설명의 문장, 어순, 표현을 복사하거나 일부 단어만 바꿔 쓰지 않는다. 주체·행위·날짜·수치의 사실요소만 추출한 뒤 완전히 새로운 문장으로 작성한다.
@@ -279,8 +278,8 @@ const copiesSourceExpression = (generated, sourceText) => {
 
 function validateAnalysis(value) {
   const errors = [];
-  if (!Array.isArray(value?.items) || value.items.length < 4 || value.items.length > 8) {
-    errors.push(`결과 개수 ${Array.isArray(value?.items) ? value.items.length : 0}개(허용 4~8개)`);
+  if (!Array.isArray(value?.items) || value.items.length < 3 || value.items.length > 8) {
+    errors.push(`결과 개수 ${Array.isArray(value?.items) ? value.items.length : 0}개(허용 3~8개)`);
     return errors;
   }
   const usedDocumentIds = new Set();
@@ -312,7 +311,7 @@ let analysis;
 let validationErrors = [];
 let modelUsed = MODEL;
 for (let attempt = 1; attempt <= 3; attempt += 1) {
-  const correction = attempt === 1 ? '' : `\n\n이전 응답은 다음 검증에 실패했다: ${validationErrors.join(' / ')}. 원자료의 제목·설명 표현을 반복하지 말고 사실요소만 이용해 완전히 새로운 문장으로 4~8개를 다시 작성하라.`;
+  const correction = attempt === 1 ? '' : `\n\n이전 응답은 다음 검증에 실패했다: ${validationErrors.join(' / ')}. 원자료의 제목·설명 표현을 반복하지 말고 사실요소만 이용해 완전히 새로운 문장으로 3~8개를 다시 작성하라.`;
   const aiRequest = await requestAi({
     systemInstruction: { parts: [{ text: '국가·공공기관 공식 자료의 사실요소만 근거로 삼고 원자료 표현을 복제하지 않은 한국어 사실 JSON만 출력한다.' }] },
     contents: [{ role: 'user', parts: [{ text: prompt + correction }] }],
