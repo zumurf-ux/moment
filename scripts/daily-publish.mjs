@@ -200,7 +200,7 @@ const prompt = `당신은 한국어 일간 브리핑 '잠시'의 공공정보 �
 3. 보도자료의 홍보성 표현, 장관 발언, 전망, 평가, 구호는 제거하고 시행·발표·수치·일정·경보·의결처럼 확인된 사실만 쓴다.
 4. 원자료 제목과 설명의 문장, 어순, 표현을 복사하거나 일부 단어만 바꿔 쓰지 않는다. 주체·행위·날짜·수치의 사실요소만 추출한 뒤 완전히 새로운 문장으로 작성한다.
 5. 직접 인용, 따옴표 인용, 사진·도표·그래픽 설명은 사용하지 않는다.
-6. 제목은 구체적인 주어와 확정된 결과를 담고, 요약은 2문장·120자 이내로 쓴다.
+6. 제목은 구체적인 주어와 확정된 결과를 담고, 요약은 1~2문장·120자 이내로 쓴다.
 7. 같은 사건의 공식 자료가 여러 개면 sourceIds에 함께 기록하고, 하나뿐이면 해당 공식 원자료 하나만 기록한다.
 8. 입력에 없는 사실·기관·식별자를 만들지 않는다.
 
@@ -280,6 +280,15 @@ const copiesSourceExpression = (generated, sourceText) => {
   return longestCommonRun(generated, sourceText) >= threshold;
 };
 
+const normalizeGeneratedText = value => String(value || '').replace(/\s+/g, ' ').trim();
+const shortenSummary = value => {
+  const text = normalizeGeneratedText(value);
+  if (text.length <= 120) return text;
+  const firstSentence = text.match(/^.*?[.!?。](?:\s|$)/)?.[0]?.trim();
+  if (firstSentence && firstSentence.length <= 120) return firstSentence;
+  return `${text.slice(0, 117).trimEnd()}…`;
+};
+
 function validateAnalysis(value) {
   const errors = [];
   if (!Array.isArray(value?.items) || value.items.length < 3 || value.items.length > 8) {
@@ -337,6 +346,13 @@ for (let attempt = 1; attempt <= 3; attempt += 1) {
       } else {
         const arrayEntry = Object.entries(parsed || {}).find(([, value]) => Array.isArray(value));
         analysis = arrayEntry ? { ...parsed, items: arrayEntry[1] } : parsed;
+      }
+      if (Array.isArray(analysis?.items)) {
+        analysis.items = analysis.items.map(item => ({
+          ...item,
+          title: normalizeGeneratedText(item.title),
+          summary: shortenSummary(item.summary),
+        }));
       }
       validationErrors = validateAnalysis(analysis);
     } catch (error) {
