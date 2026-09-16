@@ -11,7 +11,9 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -89,6 +91,13 @@ import com.thedesignuncle.jamsi.issue.IssueUiState
 import com.thedesignuncle.jamsi.issue.IssueViewModel
 import com.thedesignuncle.jamsi.issue.IssueViewModelFactory
 import com.thedesignuncle.jamsi.model.IssueType
+import com.thedesignuncle.jamsi.model.MarketQuote
+import com.thedesignuncle.jamsi.model.MarketSnapshot
+import java.text.NumberFormat
+import java.time.OffsetDateTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 private val Ink = Color(0xFF15191D)
 private val InkBlue = Color(0xFF153047)
@@ -353,6 +362,8 @@ private fun IssueScreen(
                     .padding(horizontal = 22.dp)
                     .padding(top = 12.dp, bottom = 30.dp),
             ) {
+                MarketBoard(state.marketSnapshot)
+                Spacer(Modifier.height(18.dp))
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.fillMaxWidth(),
@@ -518,6 +529,98 @@ private fun IssueScreen(
         }
     }
 }
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun MarketBoard(snapshot: MarketSnapshot) {
+    val quotes = snapshot.quotes
+    val tickerText = if (quotes.isEmpty()) {
+        "주요 지수 시세를 준비하고 있습니다"
+    } else {
+        quotes.joinToString("     ◆     ") { quote ->
+            "${quote.name} ${formatMarketNumber(quote.value)} ${formatSigned(quote.changePercent)}%"
+        }
+    }
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("주식", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Black, letterSpacing = 1.1.sp)
+                Spacer(Modifier.width(8.dp))
+                Text("지금 시세", color = InkBlue, fontSize = 16.sp, fontWeight = FontWeight.Black)
+            }
+            Text(formatMarketUpdatedAt(snapshot.updatedAt), color = MutedInk, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+        }
+        Surface(color = Color(0xFF10283A), contentColor = Color.White, shape = RoundedCornerShape(2.dp)) {
+            Text(
+                text = tickerText,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .basicMarquee(iterations = Int.MAX_VALUE)
+                    .padding(vertical = 11.dp),
+                maxLines = 1,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.2.sp,
+            )
+        }
+        if (quotes.isNotEmpty()) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                quotes.chunked(2).forEach { rowQuotes ->
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        rowQuotes.forEach { quote ->
+                            MarketCard(quote, Modifier.weight(1f))
+                        }
+                        if (rowQuotes.size == 1) Spacer(Modifier.weight(1f))
+                    }
+                    HorizontalDivider(color = PrintRule.copy(alpha = 0.2f), thickness = 0.6.dp)
+                }
+            }
+        }
+        Text(
+            "시세는 지연될 수 있습니다.",
+            modifier = Modifier.fillMaxWidth().padding(top = 6.dp, end = 2.dp),
+            color = MutedInk,
+            fontSize = 9.sp,
+            textAlign = androidx.compose.ui.text.style.TextAlign.End,
+        )
+    }
+}
+
+@Composable
+private fun MarketCard(quote: MarketQuote, modifier: Modifier = Modifier) {
+    val changeColor = when {
+        quote.change > 0 -> Color(0xFFD24C43)
+        quote.change < 0 -> Color(0xFF2F64A0)
+        else -> MutedInk
+    }
+    Column(modifier = modifier.padding(horizontal = 10.dp, vertical = 11.dp)) {
+        Text(quote.name, color = MutedInk, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+        Text(formatMarketNumber(quote.value), color = Ink, fontSize = 17.sp, fontWeight = FontWeight.Black)
+        Text(
+            "${formatSigned(quote.change)} · ${formatSigned(quote.changePercent)}%",
+            color = changeColor,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+        )
+    }
+}
+
+private fun formatMarketNumber(value: Double): String = NumberFormat.getNumberInstance(Locale.KOREA).apply {
+    minimumFractionDigits = 2
+    maximumFractionDigits = 2
+}.format(value)
+
+private fun formatSigned(value: Double): String = "${if (value > 0) "+" else ""}${formatMarketNumber(value)}"
+
+private fun formatMarketUpdatedAt(value: String): String = runCatching {
+    val dateTime = OffsetDateTime.parse(value).atZoneSameInstant(ZoneId.of("Asia/Seoul"))
+    dateTime.format(DateTimeFormatter.ofPattern("MM.dd HH:mm", Locale.KOREA)) + " 기준"
+}.getOrDefault("시세 준비 중")
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)

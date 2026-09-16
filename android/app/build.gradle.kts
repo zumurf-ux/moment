@@ -27,8 +27,8 @@ android {
         applicationId = "com.thedesignuncle.jamsi"
         minSdk = 23
         targetSdk = 36
-        versionCode = 5
-        versionName = "1.0.03"
+        versionCode = 6
+        versionName = "1.0.04"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "API_BASE_URL", "\"${providers.gradleProperty("JAMSI_API_BASE_URL").orElse("http://10.0.2.2:8000/").get()}\"")

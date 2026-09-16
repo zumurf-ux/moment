@@ -1,0 +1,27 @@
+name: 주요 지수 시세 자동 갱신
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: market-ticker
+  cancel-in-progress: true
+
+jobs:
+  update-market-board:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: 저장소 받기
+        uses: actions/checkout@v6
+      - name: 주요 지수 조회 및 파이어베이스 갱신
+        env:
+          FIREBASE_API_KEY: AIzaSyBRWlA5RmVNo83hm5QdMwVTieA7RMeQKnk
+          FIREBASE_ADMIN_EMAIL: ${{ secrets.FIREBASE_ADMIN_EMAIL }}
+          FIREBASE_ADMIN_PASSWORD: ${{ secrets.FIREBASE_ADMIN_PASSWORD }}
+        run: node scripts/market-publish.mjs

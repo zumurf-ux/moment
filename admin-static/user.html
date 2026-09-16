@@ -5,10 +5,26 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#ffffff">
   <title>잠시</title>
-  <link rel="stylesheet" href="./styles.css?v=23">
+  <link rel="stylesheet" href="./styles.css?v=24">
 </head>
 <body class="reader-body">
   <main class="user-preview">
+    <section class="market-board" aria-labelledby="marketTitle">
+      <div class="market-heading">
+        <div>
+          <span class="market-kicker">주식</span>
+          <strong id="marketTitle">지금 시세</strong>
+        </div>
+        <span id="marketUpdatedAt" class="market-updated">시세 준비 중</span>
+      </div>
+      <div class="market-marquee" aria-label="주요 지수 움직이는 시세판">
+        <div id="marketTrack" class="market-track">
+          <span class="market-ticker-item">주요 지수를 불러오는 중입니다</span>
+        </div>
+      </div>
+      <div id="marketGrid" class="market-grid" aria-live="polite"></div>
+      <p class="market-note">시세는 지연될 수 있습니다.</p>
+    </section>
     <header class="reader-brand" aria-label="잠시">
       <img src="./app-icon.png?v=4" alt="" width="68" height="68">
       <div class="reader-brand-copy">
@@ -25,7 +41,7 @@
     import { firebaseConfig } from './firebase-config.js?v=13';
     import { demoData } from './demo-data.js?v=13';
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js';
-    import { collection, getDocs, getFirestore, query, where } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js';
+    import { collection, doc, getDoc, getDocs, getFirestore, query, where } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js';
 
     const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
     const visibleTime = edition => {
@@ -36,6 +52,34 @@
     const selectVisibleEdition = editions => editions
       .filter(edition => edition.status === 'PUBLISHED' && visibleTime(edition) <= Date.now())
       .sort((a,b) => String(b.publishDate).localeCompare(String(a.publishDate)) || Number(b.version||0)-Number(a.version||0))[0];
+
+    const numberFormat = new Intl.NumberFormat('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const marketDirection = value => Number(value) > 0 ? 'up' : Number(value) < 0 ? 'down' : 'flat';
+    const signed = value => `${Number(value) > 0 ? '+' : ''}${numberFormat.format(Number(value || 0))}`;
+    const marketTime = value => {
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return '갱신 시각 확인 중';
+      return `${new Intl.DateTimeFormat('ko-KR', { timeZone:'Asia/Seoul', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', hour12:false }).format(date)} 기준`;
+    };
+
+    function renderMarkets(snapshot) {
+      const quotes = Array.isArray(snapshot?.quotes) ? snapshot.quotes : [];
+      if (!quotes.length) return;
+      const ticker = quotes.map(quote => {
+        const direction = marketDirection(quote.change);
+        return `<span class="market-ticker-item"><b>${escapeHtml(quote.name)}</b><strong>${numberFormat.format(Number(quote.value))}</strong><em class="${direction}">${signed(quote.changePercent)}%</em></span>`;
+      }).join('');
+      document.querySelector('#marketTrack').innerHTML = `${ticker}${ticker}`;
+      document.querySelector('#marketGrid').innerHTML = quotes.map(quote => {
+        const direction = marketDirection(quote.change);
+        return `<article class="market-card">
+          <span>${escapeHtml(quote.name)}</span>
+          <strong>${numberFormat.format(Number(quote.value))}</strong>
+          <em class="${direction}">${signed(quote.change)} · ${signed(quote.changePercent)}%</em>
+        </article>`;
+      }).join('');
+      document.querySelector('#marketUpdatedAt').textContent = marketTime(snapshot.updatedAt);
+    }
 
     function render(edition) {
       document.querySelector('#userHeadline').textContent = edition.headline;
@@ -52,8 +96,12 @@
       let editions = demoData.editions;
       try {
         const db = getFirestore(initializeApp(firebaseConfig));
-        const snapshot = await getDocs(query(collection(db,'editions'),where('type','==','daily'),where('status','==','PUBLISHED')));
-        editions = snapshot.docs.map(doc => ({id:doc.id,...doc.data()}));
+        const [editionSnapshot, marketSnapshot] = await Promise.all([
+          getDocs(query(collection(db,'editions'),where('type','==','daily'),where('status','==','PUBLISHED'))),
+          getDoc(doc(db, 'appConfig', 'markets')),
+        ]);
+        editions = editionSnapshot.docs.map(doc => ({id:doc.id,...doc.data()}));
+        if (marketSnapshot.exists()) renderMarkets(marketSnapshot.data());
       } catch (error) {
         console.warn('Firebase 발행본을 불러오지 못해 저장본을 표시합니다.');
       }
