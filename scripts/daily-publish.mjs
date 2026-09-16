@@ -199,7 +199,6 @@ async function collectPublicFacts(source) {
         ? rawTitle.slice(0, -(sourceName.length + 3)).trim()
         : rawTitle;
       const publishedAt = tag(item, 'pubDate');
-      const publishedDate = parsePublishedAt(publishedAt);
       return {
         id: `${source.id}-${index + 1}`,
         category: source.category,
@@ -210,9 +209,10 @@ async function collectPublicFacts(source) {
           allowedHosts: ['news.google.com'],
         }),
         publishedAt,
-        sourceDate: publishedDate ? kstDate(publishedDate) : '',
+        // 검색 URL의 after/before 범위가 기준 날짜를 보장한다. RSS pubDate는 UTC라 자정 전후 재필터링 시 누락될 수 있다.
+        sourceDate,
       };
-    }).filter(item => item.sourceDate === sourceDate && item.title && item.sourceName && item.url);
+    }).filter(item => item.title && item.sourceName && item.url);
   } finally {
     clearTimeout(timeout);
   }
