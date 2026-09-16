@@ -12,6 +12,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -551,17 +552,17 @@ private fun MarketBoard(snapshot: MarketSnapshot) {
         )
         Spacer(Modifier.height(15.dp))
         if (quotes.isNotEmpty()) {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                quotes.chunked(2).forEach { rowQuotes ->
-                    Row(modifier = Modifier.fillMaxWidth()) {
-                        rowQuotes.forEach { quote ->
-                            MarketCard(quote, Modifier.weight(1f))
-                        }
-                        if (rowQuotes.size == 1) Spacer(Modifier.weight(1f))
-                    }
-                    Spacer(Modifier.height(12.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                quotes.forEach { quote ->
+                    MarketCard(quote, Modifier.width(102.dp))
                 }
             }
+            Spacer(Modifier.height(12.dp))
         }
         Text(
             "${snapshot.basisDate.replace('-', '.').ifBlank { formatMarketUpdatedAt(snapshot.updatedAt).take(5) }} 종가 기준",
