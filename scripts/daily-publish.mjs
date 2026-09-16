@@ -33,6 +33,19 @@ const OFFICIAL_SOURCES = [
   { id: 'kma', name: '기상청', defaultCategory: '생활·안전', url: 'https://www.kma.go.kr/servlet/NeoboardProcess?mode=rss&bid=press&url=http%3A%2F%2Fwww.kma.go.kr%2Fnotify%2Fpress%2Fkma_list.jsp', allowedHosts: ['www.kma.go.kr', 'kma.go.kr'], license: '출처표시 조건 공식 RSS' },
 ];
 
+// 공식 1차 자료가 없는 분야를 빈칸으로 두지 않기 위한 공개 사실 후보 검색어다.
+// 공개 RSS의 문장·요약은 서비스에 재게시하지 않고 AI 교차검증 입력으로만 사용한다.
+const PUBLIC_SEARCH_QUERIES = [
+  { category: '정책', query: '정부 정책 OR 법안 OR 시행령 OR 행정' },
+  { category: '경제·금융', query: '코스피 OR 코스닥 OR 환율 OR 금리 OR 경제 OR 금융' },
+  { category: '사회', query: '사회 OR 교육 OR 노동 OR 사건 OR 인구' },
+  { category: '국제', query: '국제 OR 세계 OR 정상회담 OR 유엔' },
+  { category: '생활·안전', query: '날씨 OR 재난 OR 교통 OR 보건 OR 식품안전' },
+  { category: '과학·기술', query: '과학 OR 기술 OR 인공지능 OR 우주 OR 반도체' },
+  { category: '문화·예술', query: '문화 OR 예술 OR 영화 OR 음악 OR 공연 OR 출판' },
+  { category: '스포츠', query: '스포츠 OR 축구 OR 야구 OR 배구 OR 농구 OR 골프' },
+];
+
 const kstDate = (date = new Date()) => new Intl.DateTimeFormat('en-CA', {
   timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit',
 }).format(date);
@@ -44,6 +57,11 @@ const addDays = (value, days) => {
 const sourceDate = process.env.SOURCE_DATE || addDays(kstDate(), -1);
 const publishDate = addDays(sourceDate, 1);
 const visibleAt = `${publishDate}T05:00:00+09:00`;
+const PUBLIC_FACT_SOURCES = PUBLIC_SEARCH_QUERIES.map((entry, index) => ({
+  id: `public-${index + 1}`,
+  category: entry.category,
+  url: `https://news.google.com/rss/search?q=${encodeURIComponent(`${entry.query} after:${sourceDate} before:${publishDate}`)}&hl=ko&gl=KR&ceid=KR:ko`,
+}));
 
 const authResponse = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_API_KEY}`, {
   method: 'POST', headers: { 'content-type': 'application/json' },
@@ -160,6 +178,48 @@ async function collectFeed(source) {
   });
 }
 
+async function collectPublicFacts(source) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 20_000);
+  try {
+    const response = await fetch(source.url, {
+      headers: {
+        accept: 'application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.5',
+        'accept-language': 'ko-KR,ko;q=0.9',
+        'user-agent': 'Mozilla/5.0 (compatible; JamsiPublicFactBot/1.0; +https://zumurf-ux.github.io/moment/)',
+      },
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const xml = await response.text();
+    if (!/<rss\b/i.test(xml)) throw new Error('RSS 형식이 아님');
+    return [...xml.matchAll(/<item(?:\s[^>]*)?>([\s\S]*?)<\/item>/gi)].slice(0, 18).map((match, index) => {
+      const item = match[1];
+      const sourceName = tag(item, 'source');
+      const rawTitle = tag(item, 'title');
+      const titleWithoutSource = sourceName && rawTitle.endsWith(` - ${sourceName}`)
+        ? rawTitle.slice(0, -(sourceName.length + 3)).trim()
+        : rawTitle;
+      const publishedAt = tag(item, 'pubDate');
+      const publishedDate = parsePublishedAt(publishedAt);
+      return {
+        id: `${source.id}-${index + 1}`,
+        category: source.category,
+        title: titleWithoutSource,
+        sourceName,
+        url: officialItemUrl(tag(item, 'link') || tag(item, 'guid'), {
+          url: source.url,
+          allowedHosts: ['news.google.com'],
+        }),
+        publishedAt,
+        sourceDate: publishedDate ? kstDate(publishedDate) : '',
+      };
+    }).filter(item => item.sourceDate === sourceDate && item.title && item.sourceName && item.url);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 // 한 기관의 연결 지연이 전체 발행을 막지 않도록 공식 피드를 두 곳씩 제한 병렬 수집한다.
 const feedResults = [];
 for (let index = 0; index < OFFICIAL_SOURCES.length; index += 2) {
@@ -186,13 +246,28 @@ const articles = collected.filter(article => {
   return true;
 }).slice(0, 80);
 
+const publicFactResults = await Promise.allSettled(PUBLIC_FACT_SOURCES.map(collectPublicFacts));
+const failedPublicCategories = publicFactResults
+  .map((result, index) => result.status === 'rejected' ? `${PUBLIC_FACT_SOURCES[index].category}: ${result.reason?.message || result.reason}` : null)
+  .filter(Boolean);
+if (failedPublicCategories.length) console.warn(`공개 사실 RSS 일부 수집 실패: ${failedPublicCategories.join(' / ')}`);
+
+const publicFacts = publicFactResults
+  .flatMap(result => result.status === 'fulfilled' ? result.value : [])
+  .filter((fact, index, array) => array.findIndex(other => other.title === fact.title && other.sourceName === fact.sourceName) === index)
+  .reduce((result, fact) => {
+    const categoryCount = result.filter(item => item.category === fact.category).length;
+    if (categoryCount < 12) result.push(fact);
+    return result;
+  }, []);
+
 if (articles.length < 2) {
   console.warn(`${sourceDate} 공식 1차 자료가 ${articles.length}개뿐이므로 공개 웹 교차 검증으로 8개 분야를 보완합니다.`);
 }
 
-const prompt = `당신은 한국어 일간 브리핑 '잠시'의 공공정보 편집 AI다. 입력은 ${sourceDate} 00:00~23:59(KST)에 국가기관·공공기관이 직접 공개한 공식 자료뿐이다.
+const prompt = `당신은 한국어 일간 브리핑 '잠시'의 사실 편집 AI다. 입력은 ${sourceDate} 00:00~23:59(KST)의 국가·공공기관 공식 자료와, 비공개 검증용 공개 RSS 사실 후보다.
 
-목표는 공식 자료를 분야별로 종합 검토하고, 공식 후보가 없는 분야만 Google 검색으로 전날의 공개 사실을 교차 확인해 8개 전 분야의 짧은 제목을 새로 작성하는 것이다.
+목표는 공식 자료를 분야별로 종합 검토하고, 공식 후보가 없는 분야는 공개 RSS 후보 중 서로 다른 2개 이상의 확인처가 공통으로 보도한 전날의 사실로 채워 8개 전 분야의 짧은 제목을 새로 작성하는 것이다.
 
 편집 규칙:
 1. 결과는 정확히 8개다. 정책, 경제·금융, 사회, 국제, 생활·안전, 과학·기술, 문화·예술, 스포츠를 각 1개씩 작성한다.
@@ -201,19 +276,22 @@ const prompt = `당신은 한국어 일간 브리핑 '잠시'의 공공정보 �
 4. 원자료 제목과 설명의 문장, 어순, 표현을 복사하거나 일부 단어만 바꿔 쓰지 않는다. 주체·행위·날짜·수치의 사실요소만 추출한 뒤 완전히 새로운 문장으로 작성한다.
 5. 직접 인용, 따옴표 인용, 사진·도표·그래픽 설명은 사용하지 않는다.
 6. 공개 콘텐츠는 제목뿐이다. 제목은 6~36자를 목표로 한 문장을 끝까지 완성하고, 구체적인 주체·결과·핵심 수치를 포함한다. '은/는 …에 맞춰'처럼 설명을 늘이지 말고 '코스피 7,000선 돌파', '기준금리 연 3.00%로 동결'처럼 핵심 결과로 끝낸다. 마침표, 감탄문, 질문, 낚시성 표현은 쓰지 않는다.
-7. 입력된 공식 자료로 확인된 항목은 sourceIds에 해당 id를 기록하고 sourceNames와 sourceUrls는 빈 배열로 둔다.
-8. 해당 분야의 적절한 공식 후보가 입력에 없을 때만 Google 검색을 사용한다. ${sourceDate} 안에 실제 발생·발표·마감·확정된 사실을 서로 다른 기관 또는 매체의 직접 열람 가능한 HTTPS URL 2개 이상으로 확인하고, sourceIds는 빈 배열, sourceNames와 sourceUrls에 확인처를 기록한다. 검색결과 목록·홈페이지 대표 URL·전망·예정·소문·주장·해설은 금지한다.
+7. 입력된 공식 자료로 확인된 항목은 sourceIds에 해당 id를 기록하고 publicIds는 빈 배열로 둔다.
+8. 해당 분야의 적절한 공식 후보가 없을 때만 같은 분야의 공개 사실 후보를 사용한다. ${sourceDate} 안에 실제 발생·발표·마감·확정된 동일 사실을 서로 다른 확인처 2곳 이상에서 찾아 publicIds에 기록하고 sourceIds는 빈 배열로 둔다. 전망·예정·소문·주장·해설은 금지한다.
 9. 스포츠는 확정 경기 결과·기록, 국제는 확정된 정부·국제기구 발표나 실제 발생 사건, 금융은 마감 지수·공표 지표처럼 날짜와 수치를 검증할 수 있는 사실을 우선한다.
-10. 기사나 검색 결과 제목을 복사하지 않고 공통 사실요소만으로 새 제목을 만든다. 근거가 부족하면 그럴듯하게 만들지 말고 응답을 {"error":"검증 근거 부족: 분야"}로 끝낸다.
+10. 기사나 공개 RSS 제목을 복사하지 않고 여러 후보에 공통인 사실요소만으로 새 제목을 만든다. 근거가 부족하면 그럴듯하게 만들지 말고 응답을 {"error":"검증 근거 부족: 분야"}로 끝낸다.
 11. 입력에 없는 공식 자료 식별자를 만들지 않는다.
 
 JSON만 출력한다.
-{"items":[{"category":"지정된 분야 중 하나","title":"6~36자의 완결된 사실 제목","sourceIds":["입력 id 또는 빈 배열"],"sourceNames":["검색 확인처 또는 빈 배열"],"sourceUrls":["검색 근거 URL 또는 빈 배열"],"score":0,"reason":"선정·검증 근거","factors":{"freshness":0,"impact":0,"safety":0,"verification":0}}]}
+{"items":[{"category":"지정된 분야 중 하나","title":"6~36자의 완결된 사실 제목","sourceIds":["공식 후보 id 또는 빈 배열"],"publicIds":["공개 후보 id 2개 이상 또는 빈 배열"],"score":0,"reason":"선정·검증 근거","factors":{"freshness":0,"impact":0,"safety":0,"verification":0}}]}
 
-공식 자료 후보: ${JSON.stringify(articles)}`;
+공식 자료 후보: ${JSON.stringify(articles)}
+
+공개 사실 후보: ${JSON.stringify(publicFacts)}`;
 
 const allowedCategories = new Set(TARGET_CATEGORIES);
 const articleById = new Map(articles.map(article => [article.id, article]));
+const publicFactById = new Map(publicFacts.map(fact => [fact.id, fact]));
 const neutralityBlocklist = /빌런|조롱|전격|실책|책임론|강력히|망언|폭언|굴욕|참사 정권|무능 정권/;
 const transientAiStatuses = new Set([429, 500, 502, 503, 504]);
 async function requestAi(body) {
@@ -289,23 +367,6 @@ const normalizeTitle = value => normalizeGeneratedText(value)
   .replace(/[.!?。！？]+$/g, '')
   .trim();
 
-const normalizedHostname = rawUrl => {
-  try {
-    return new URL(rawUrl).hostname.toLowerCase().replace(/^www\./, '');
-  } catch {
-    return '';
-  }
-};
-
-const isUsableEvidenceUrl = rawUrl => {
-  try {
-    const url = new URL(rawUrl);
-    return url.protocol === 'https:' && Boolean(url.hostname) && !/^(?:localhost|127\.0\.0\.1)$/i.test(url.hostname);
-  } catch {
-    return false;
-  }
-};
-
 const parseFirstJsonObject = raw => {
   try {
     return JSON.parse(raw);
@@ -346,17 +407,22 @@ function validateAnalysis(value) {
     if (usedCategories.has(item.category)) errors.push(`${item.category} 분야가 중복됨`);
     usedCategories.add(item.category);
     const sourceIds = Array.isArray(item.sourceIds) ? item.sourceIds : [];
+    const publicIds = Array.isArray(item.publicIds) ? item.publicIds : [];
     const usesOfficialSource = sourceIds.length > 0;
     const sourceDocuments = usesOfficialSource ? sourceIds.filter(id => articleById.has(id)).map(id => articleById.get(id)) : [];
     if (usesOfficialSource && sourceDocuments.length !== sourceIds.length) errors.push(`${item.category} 공식 자료 식별자 오류`);
     if (usesOfficialSource && sourceIds.some(id => usedDocumentIds.has(id))) errors.push(`${item.category} 동일 공식 자료 중복 사용`);
     sourceIds.forEach(id => usedDocumentIds.add(id));
-    if (!usesOfficialSource) {
-      const urls = [...new Set((Array.isArray(item.sourceUrls) ? item.sourceUrls : []).filter(isUsableEvidenceUrl))];
-      const hosts = new Set(urls.map(normalizedHostname).filter(Boolean));
-      if (urls.length < 2 || hosts.size < 2) errors.push(`${item.category} 독립 확인 URL 부족`);
-      item.sourceUrls = urls;
-      item.sourceNames = [...new Set((Array.isArray(item.sourceNames) ? item.sourceNames : []).map(normalizeGeneratedText).filter(Boolean))];
+    if (usesOfficialSource && publicIds.length) errors.push(`${item.category} 공식·공개 근거를 동시에 지정함`);
+    const publicDocuments = !usesOfficialSource ? publicIds.filter(id => publicFactById.has(id)).map(id => publicFactById.get(id)) : [];
+    if (!usesOfficialSource && (publicDocuments.length < 2 || publicDocuments.length !== publicIds.length)) {
+      errors.push(`${item.category} 공개 사실 식별자 2개 이상 필요`);
+    }
+    if (!usesOfficialSource && publicDocuments.some(document => document.category !== item.category)) {
+      errors.push(`${item.category}와 공개 근거 분야가 다름`);
+    }
+    if (!usesOfficialSource && new Set(publicDocuments.map(document => document.sourceName)).size < 2) {
+      errors.push(`${item.category} 서로 다른 확인처 2곳 미만`);
     }
     if (!item.title || item.title.length < 6 || item.title.length > 42 || /[.!?。！？]$/.test(item.title)) {
       errors.push(`${item.category} 제목 길이 또는 형식 오류`);
@@ -370,6 +436,11 @@ function validateAnalysis(value) {
         errors.push(`${item.category} 원자료 표현과 지나치게 유사함`);
       }
     }
+    for (const publicDocument of publicDocuments) {
+      if (copiesSourceExpression(item.title, publicDocument.title)) {
+        errors.push(`${item.category} 공개 RSS 제목과 지나치게 유사함`);
+      }
+    }
   }
   return [...new Set(errors)];
 }
@@ -378,11 +449,10 @@ let analysis;
 let validationErrors = [];
 let modelUsed = MODEL;
 for (let attempt = 1; attempt <= 3; attempt += 1) {
-  const correction = attempt === 1 ? '' : `\n\n이전 응답은 다음 검증에 실패했다: ${validationErrors.join(' / ')}. 공식 후보와 Google 검색을 다시 확인하고 원문 표현을 반복하지 말며, 8개 분야별로 6~36자의 완결된 사실 제목을 정확히 1개씩 다시 작성하라.`;
+  const correction = attempt === 1 ? '' : `\n\n이전 응답은 다음 검증에 실패했다: ${validationErrors.join(' / ')}. 공식 후보와 공개 RSS 후보를 다시 확인하고 원문 표현을 반복하지 말며, 8개 분야별로 6~36자의 완결된 사실 제목을 정확히 1개씩 다시 작성하라.`;
   const aiRequest = await requestAi({
-    systemInstruction: { parts: [{ text: '공식 1차 자료를 우선하고 부족한 분야만 Google 검색으로 교차 검증하며, 원문 표현을 복제하지 않은 한국어 사실 JSON만 출력한다.' }] },
+    systemInstruction: { parts: [{ text: '공식 1차 자료를 우선하고 부족한 분야는 공개 RSS의 서로 다른 확인처 2곳 이상으로 교차 검증하며, 원문 표현을 복제하지 않은 한국어 사실 JSON만 출력한다.' }] },
     contents: [{ role: 'user', parts: [{ text: prompt + correction }] }],
-    tools: [{ googleSearch: {} }],
     generationConfig: { temperature: 0, responseMimeType: 'application/json', maxOutputTokens: 4096 },
   });
   const { response: aiResponse, model } = aiRequest;
@@ -420,16 +490,19 @@ if (validationErrors.length > 0) throw new Error(`AI 결과 검증 3회 실패: 
 
 const verifiedItems = analysis.items.map(item => {
   const sourceIds = Array.isArray(item.sourceIds) ? item.sourceIds : [];
+  const publicIds = Array.isArray(item.publicIds) ? item.publicIds : [];
   const sourceDocuments = sourceIds.map(id => articleById.get(id)).filter(Boolean);
   const isPublicFactFallback = sourceDocuments.length === 0;
+  const publicDocuments = isPublicFactFallback ? publicIds.map(id => publicFactById.get(id)).filter(Boolean) : [];
   return {
     ...item,
     sourceIds,
+    publicIds,
     sourceNames: isPublicFactFallback
-      ? [...new Set((item.sourceNames || []).map(normalizeGeneratedText).filter(Boolean))]
+      ? [...new Set(publicDocuments.map(document => document.sourceName))]
       : [...new Set(sourceDocuments.map(document => document.sourceName))],
     sourceUrls: isPublicFactFallback
-      ? [...new Set((item.sourceUrls || []).filter(isUsableEvidenceUrl))]
+      ? [...new Set(publicDocuments.map(document => document.url))]
       : [...new Set(sourceDocuments.map(document => document.url))],
     sourceLicenses: isPublicFactFallback
       ? ['공개 웹 교차 검증·문장 비복제']
@@ -503,7 +576,7 @@ await Promise.all(analysis.items.map((item, index) => setDocument('candidates', 
   sourceName: item.sourceNames.join(' · '), sourceNames: item.sourceNames, sourceUrls: item.sourceUrls,
   sourceUrl: item.sourceUrls[0], factDate: sourceDate.replaceAll('-', '.'), sourceDate,
   sourceLicenses: item.sourceLicenses,
-  verified: true, trustGrade: item.isPublicFactFallback ? 'B+' : 'A', sourceIds: item.sourceIds,
+  verified: true, trustGrade: item.isPublicFactFallback ? 'B+' : 'A', sourceIds: item.sourceIds, publicIds: item.publicIds,
   verificationType: item.isPublicFactFallback ? 'PUBLIC_WEB_CROSS_CHECKED' : 'OFFICIAL_PRIMARY_SOURCE',
   analysisFactors: item.factors, analysisScore: Number(item.score || 0), analysisRank: index + 1,
   analysisReason: item.reason, analyzedAt: new Date().toISOString(),
