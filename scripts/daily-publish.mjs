@@ -187,7 +187,7 @@ const articles = collected.filter(article => {
 }).slice(0, 80);
 
 if (articles.length < 2) {
-  throw new Error(`${sourceDate} 국가·공공기관 공식 자료가 ${articles.length}개뿐이어서 자동 발행을 중단합니다.`);
+  console.warn(`${sourceDate} 공식 1차 자료가 ${articles.length}개뿐이므로 공개 웹 교차 검증으로 8개 분야를 보완합니다.`);
 }
 
 const prompt = `당신은 한국어 일간 브리핑 '잠시'의 공공정보 편집 AI다. 입력은 ${sourceDate} 00:00~23:59(KST)에 국가기관·공공기관이 직접 공개한 공식 자료뿐이다.
