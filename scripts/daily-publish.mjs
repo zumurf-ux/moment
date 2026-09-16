@@ -254,6 +254,31 @@ const publicFacts = publicFactResults
     return result;
   }, []);
 
+const PUBLIC_TOKEN_STOPWORDS = new Set(['대한', '관련', '오늘', '어제', '한국', '정부', '공개', '발표', '뉴스', '종합', '현장']);
+const factTokens = title => new Set(String(title || '')
+  .split(/[^0-9A-Za-z가-힣]+/)
+  .map(token => token.trim().toLowerCase())
+  .filter(token => token.length >= 2 && !PUBLIC_TOKEN_STOPWORDS.has(token)));
+const publicPairHints = Object.fromEntries(TARGET_CATEGORIES.map(category => {
+  const categoryFacts = publicFacts.filter(fact => fact.category === category);
+  const pairs = [];
+  for (let leftIndex = 0; leftIndex < categoryFacts.length; leftIndex += 1) {
+    for (let rightIndex = leftIndex + 1; rightIndex < categoryFacts.length; rightIndex += 1) {
+      const left = categoryFacts[leftIndex];
+      const right = categoryFacts[rightIndex];
+      if (left.sourceName === right.sourceName) continue;
+      const rightTokens = factTokens(right.title);
+      const sharedKeywords = [...factTokens(left.title)].filter(token => rightTokens.has(token));
+      if (sharedKeywords.length >= 2) {
+        pairs.push({ ids: [left.id, right.id], sources: [left.sourceName, right.sourceName], sharedKeywords });
+      }
+    }
+  }
+  pairs.sort((left, right) => right.sharedKeywords.length - left.sharedKeywords.length);
+  return [category, pairs.slice(0, 10)];
+}));
+const publicFactsForPrompt = publicFacts.map(({ url, publishedAt, ...fact }) => fact);
+
 if (articles.length < 2) {
   console.warn(`${sourceDate} 공식 1차 자료가 ${articles.length}개뿐이므로 공개 웹 교차 검증으로 8개 분야를 보완합니다.`);
 }
@@ -270,7 +295,7 @@ const prompt = `당신은 한국어 일간 브리핑 '잠시'의 사실 편집 A
 5. 직접 인용, 따옴표 인용, 사진·도표·그래픽 설명은 사용하지 않는다.
 6. 공개 콘텐츠는 제목뿐이다. 제목은 6~36자를 목표로 한 문장을 끝까지 완성하고, 구체적인 주체·결과·핵심 수치를 포함한다. '은/는 …에 맞춰'처럼 설명을 늘이지 말고 '코스피 7,000선 돌파', '기준금리 연 3.00%로 동결'처럼 핵심 결과로 끝낸다. 마침표, 감탄문, 질문, 낚시성 표현은 쓰지 않는다.
 7. 입력된 공식 자료로 확인된 항목은 sourceIds에 해당 id를 기록하고 publicIds는 빈 배열로 둔다.
-8. 해당 분야의 적절한 공식 후보가 없을 때만 같은 분야의 공개 사실 후보를 사용한다. ${sourceDate} 안에 실제 발생·발표·마감·확정된 동일 사실을 서로 다른 확인처 2곳 이상에서 찾아 publicIds에 기록하고 sourceIds는 빈 배열로 둔다. 전망·예정·소문·주장·해설은 금지한다.
+8. 해당 분야의 적절한 공식 후보가 없을 때만 같은 분야의 공개 사실 후보를 사용한다. ${sourceDate} 안에 실제 발생·발표·마감·확정된 동일 사실을 서로 다른 확인처 2곳 이상에서 찾아 publicIds에 기록하고 sourceIds는 빈 배열로 둔다. 아래 '교차 확인 후보 쌍'을 우선 사용하며 전망·예정·소문·주장·해설은 금지한다.
 9. 스포츠는 확정 경기 결과·기록, 국제는 확정된 정부·국제기구 발표나 실제 발생 사건, 금융은 마감 지수·공표 지표처럼 날짜와 수치를 검증할 수 있는 사실을 우선한다.
 10. 기사나 공개 RSS 제목을 복사하지 않고 여러 후보에 공통인 사실요소만으로 새 제목을 만든다. 근거가 부족하면 그럴듯하게 만들지 말고 응답을 {"error":"검증 근거 부족: 분야"}로 끝낸다.
 11. 입력에 없는 공식 자료 식별자를 만들지 않는다.
@@ -280,7 +305,9 @@ JSON만 출력한다.
 
 공식 자료 후보: ${JSON.stringify(articles)}
 
-공개 사실 후보: ${JSON.stringify(publicFacts)}`;
+공개 사실 후보: ${JSON.stringify(publicFactsForPrompt)}
+
+교차 확인 후보 쌍: ${JSON.stringify(publicPairHints)}`;
 
 const allowedCategories = new Set(TARGET_CATEGORIES);
 const articleById = new Map(articles.map(article => [article.id, article]));
@@ -441,7 +468,7 @@ function validateAnalysis(value) {
 let analysis;
 let validationErrors = [];
 let modelUsed = MODEL;
-for (let attempt = 1; attempt <= 3; attempt += 1) {
+for (let attempt = 1; attempt <= 5; attempt += 1) {
   const correction = attempt === 1 ? '' : `\n\n이전 응답은 다음 검증에 실패했다: ${validationErrors.join(' / ')}. 공식 후보와 공개 RSS 후보를 다시 확인하고 원문 표현을 반복하지 말며, 8개 분야별로 6~36자의 완결된 사실 제목을 정확히 1개씩 다시 작성하라.`;
   const aiRequest = await requestAi({
     systemInstruction: { parts: [{ text: '공식 1차 자료를 우선하고 부족한 분야는 공개 RSS의 서로 다른 확인처 2곳 이상으로 교차 검증하며, 원문 표현을 복제하지 않은 한국어 사실 JSON만 출력한다.' }] },
@@ -479,7 +506,7 @@ for (let attempt = 1; attempt <= 3; attempt += 1) {
   if (validationErrors.length === 0) break;
   console.warn(`AI 분석 ${attempt}차 검증 실패: ${validationErrors.join(' / ')}`);
 }
-if (validationErrors.length > 0) throw new Error(`AI 결과 검증 3회 실패: ${validationErrors.join(' / ')}`);
+if (validationErrors.length > 0) throw new Error(`AI 결과 검증 5회 실패: ${validationErrors.join(' / ')}`);
 
 const verifiedItems = analysis.items.map(item => {
   const sourceIds = Array.isArray(item.sourceIds) ? item.sourceIds : [];
