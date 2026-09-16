@@ -10,7 +10,7 @@ const DATABASE_ID = '(default)';
 const { FIREBASE_API_KEY, FIREBASE_ADMIN_EMAIL, FIREBASE_ADMIN_PASSWORD, GEMINI_API_KEY } = process.env;
 const MODEL = process.env.AI_MODEL || 'gemini-3.1-flash-lite';
 const MODEL_CANDIDATES = [...new Set([MODEL, 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'])];
-const EDITION_VERSION = 10;
+const EDITION_VERSION = 11;
 const wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 
 for (const [name, value] of Object.entries({ FIREBASE_API_KEY, FIREBASE_ADMIN_EMAIL, FIREBASE_ADMIN_PASSWORD, GEMINI_API_KEY })) {
@@ -441,6 +441,9 @@ function validateAnalysis(value) {
     const usesOfficialSource = sourceIds.length > 0;
     const sourceDocuments = usesOfficialSource ? sourceIds.filter(id => articleById.has(id)).map(id => articleById.get(id)) : [];
     if (usesOfficialSource && sourceDocuments.length !== sourceIds.length) errors.push(`${item.category} 공식 자료 식별자 오류`);
+    if (usesOfficialSource && sourceDocuments.some(document => document.defaultCategory !== item.category)) {
+      errors.push(`${item.category}와 공식 자료 분야가 다름`);
+    }
     if (usesOfficialSource && sourceIds.some(id => usedDocumentIds.has(id))) errors.push(`${item.category} 동일 공식 자료 중복 사용`);
     sourceIds.forEach(id => usedDocumentIds.add(id));
     if (usesOfficialSource && evidencePairId) errors.push(`${item.category} 공식·공개 근거를 동시에 지정함`);
