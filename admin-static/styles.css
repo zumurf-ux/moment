@@ -158,27 +158,25 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 }
 
 /* 주식 · 지금 시세 */
-.reader-body .market-board{margin:0 0 18px;border:1px solid rgba(21,48,71,.2);background:rgba(255,255,255,.78)}
-.reader-body .market-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px 11px;background:#f5f7f8}
-.reader-body .market-heading>div{display:flex;align-items:baseline;gap:8px}
-.reader-body .market-kicker{font-size:10px;font-weight:900;letter-spacing:.14em;color:#a75638}
-.reader-body .market-heading strong{font-size:16px;letter-spacing:-.03em;color:#153047}
+.reader-body .market-board{margin:0;padding:22px 0 24px;border:0;border-bottom:1px solid rgba(58,68,75,.28);background:transparent}
+.reader-body .market-heading{display:block;padding:0 0 16px;background:none}
+.reader-body .market-heading>div{display:block}
+.reader-body .market-kicker{display:block;font-size:12px;font-weight:800;letter-spacing:.12em;color:#606970}
+.reader-body .market-heading strong{display:block;margin-top:8px;font-size:21px;line-height:1.4;letter-spacing:-.025em;color:#15191d}
 .reader-body .market-card em{font-style:normal;font-weight:850}
-.reader-body .market-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));border-bottom:1px solid rgba(21,48,71,.15)}
-.reader-body .market-card{min-width:0;margin:0!important;padding:12px 10px 13px!important;border:0!important;border-right:1px solid rgba(21,48,71,.13)!important;background:transparent!important;box-shadow:none!important}
-.reader-body .market-card:last-child{border-right:0!important}
+.reader-body .market-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px 30px;border:0}
+.reader-body .market-card{min-width:0;margin:0!important;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important}
 .reader-body .market-card span,.reader-body .market-card strong,.reader-body .market-card em{display:block}
-.reader-body .market-card span{overflow:hidden;font-size:10px;font-weight:800;color:#606970;text-overflow:ellipsis;white-space:nowrap}
-.reader-body .market-card strong{margin-top:5px;font-size:14px;letter-spacing:-.025em;color:#15191d}
-.reader-body .market-card em{margin-top:4px;font-size:9.5px;white-space:nowrap}
+.reader-body .market-card span{overflow:hidden;font-size:11px;font-weight:800;color:#606970;text-overflow:ellipsis;white-space:nowrap}
+.reader-body .market-card strong{margin-top:3px;font-size:17px;letter-spacing:-.025em;color:#15191d}
+.reader-body .market-card em{margin-top:2px;font-size:10px;white-space:nowrap}
 .reader-body .market-board .up{color:#d24c43}.reader-body .market-board .down{color:#2f64a0}.reader-body .market-board .flat{color:#727b81}
-.reader-body .market-note{padding:8px 12px 9px!important;font-size:9.5px!important;line-height:1.4!important;color:#646e75!important;text-align:right}
+.reader-body .market-note{padding:14px 0 0!important;font-size:10px!important;line-height:1.4!important;color:#646e75!important;text-align:right}
 @media(max-width:600px){
-  .reader-body .market-board{margin:0 0 16px}
-  .reader-body .market-heading{padding:12px 14px 10px}
+  .reader-body .market-board{margin:0;padding:20px 0 22px}
+  .reader-body .market-heading{padding:0 0 15px}
   .reader-body .market-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .reader-body .market-card{padding:11px 14px 12px!important;border-bottom:1px solid rgba(21,48,71,.1)!important}
-  .reader-body .market-card:nth-child(2n){border-right:0!important}
-  .reader-body .market-card:last-child{grid-column:1/-1;border-bottom:0!important}
+  .reader-body .market-card{padding:0!important}
+  .reader-body .market-card:last-child{grid-column:1/-1}
   .reader-body .market-card strong{font-size:16px}
 }

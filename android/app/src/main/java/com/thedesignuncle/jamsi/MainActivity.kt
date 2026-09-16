@@ -531,18 +531,25 @@ private fun IssueScreen(
 @Composable
 private fun MarketBoard(snapshot: MarketSnapshot) {
     val quotes = snapshot.quotes
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("주식", color = Accent, fontSize = 10.sp, fontWeight = FontWeight.Black, letterSpacing = 1.1.sp)
-                Spacer(Modifier.width(8.dp))
-                Text("지금 시세", color = InkBlue, fontSize = 16.sp, fontWeight = FontWeight.Black)
-            }
-        }
+    Column(modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
+        Text(
+            "주식 · 시장지수",
+            color = MutedInk,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 0.7.sp,
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "주요 지수 종가",
+            color = Ink,
+            fontSize = 21.sp,
+            lineHeight = 29.sp,
+            fontWeight = FontWeight.Black,
+            letterSpacing = (-0.2).sp,
+            style = TextStyle(shadow = PrintShadow),
+        )
+        Spacer(Modifier.height(15.dp))
         if (quotes.isNotEmpty()) {
             Column(modifier = Modifier.fillMaxWidth()) {
                 quotes.chunked(2).forEach { rowQuotes ->
@@ -552,7 +559,7 @@ private fun MarketBoard(snapshot: MarketSnapshot) {
                         }
                         if (rowQuotes.size == 1) Spacer(Modifier.weight(1f))
                     }
-                    HorizontalDivider(color = PrintRule.copy(alpha = 0.2f), thickness = 0.6.dp)
+                    Spacer(Modifier.height(12.dp))
                 }
             }
         }
