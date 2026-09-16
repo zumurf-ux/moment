@@ -130,9 +130,9 @@ async function collectFeed(source) {
   };
   let xml = '';
   let lastError;
-  for (let attempt = 0; attempt < 2 && !xml; attempt += 1) {
+  for (let attempt = 0; attempt < 1 && !xml; attempt += 1) {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15_000);
+    const timeout = setTimeout(() => controller.abort(), 8_000);
     try {
       const response = await fetch(source.url, { headers, signal: controller.signal });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -140,7 +140,6 @@ async function collectFeed(source) {
     } catch (error) {
       const cause = error?.cause?.code || error?.cause?.message || error?.message || String(error);
       lastError = new Error(`${source.name} Node 수집 실패: ${cause}`);
-      if (attempt < 1) await wait(1_500);
     } finally {
       clearTimeout(timeout);
     }
@@ -148,8 +147,7 @@ async function collectFeed(source) {
   if (!xml) {
     try {
       const { stdout } = await execFile('curl', [
-        '--fail', '--silent', '--show-error', '--location', '--max-time', '20',
-        '--retry', '1', '--retry-delay', '2', '--retry-all-errors',
+        '--fail', '--silent', '--show-error', '--location', '--max-time', '10',
         '--user-agent', headers['user-agent'], '--header', `Accept: ${headers.accept}`, source.url,
       ], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 });
       xml = stdout;
@@ -220,13 +218,8 @@ async function collectPublicFacts(source) {
   }
 }
 
-// 한 기관의 연결 지연이 전체 발행을 막지 않도록 공식 피드를 두 곳씩 제한 병렬 수집한다.
-const feedResults = [];
-for (let index = 0; index < OFFICIAL_SOURCES.length; index += 2) {
-  const batch = OFFICIAL_SOURCES.slice(index, index + 2);
-  feedResults.push(...await Promise.allSettled(batch.map(collectFeed)));
-  await wait(750);
-}
+// 각 기관에 하루 한 번만 요청하며, 느린 기관이 전체 발행을 지연하지 않도록 동시에 수집한다.
+const feedResults = await Promise.allSettled(OFFICIAL_SOURCES.map(collectFeed));
 const failedSources = feedResults
   .map((result, index) => result.status === 'rejected' ? `${OFFICIAL_SOURCES[index].name}: ${result.reason?.message || result.reason}` : null)
   .filter(Boolean);
