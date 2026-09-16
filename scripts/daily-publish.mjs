@@ -10,7 +10,7 @@ const DATABASE_ID = '(default)';
 const { FIREBASE_API_KEY, FIREBASE_ADMIN_EMAIL, FIREBASE_ADMIN_PASSWORD, GEMINI_API_KEY } = process.env;
 const MODEL = process.env.AI_MODEL || 'gemini-3.1-flash-lite';
 const MODEL_CANDIDATES = [...new Set([MODEL, 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'])];
-const EDITION_VERSION = 6;
+const EDITION_VERSION = 7;
 const wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 
 for (const [name, value] of Object.entries({ FIREBASE_API_KEY, FIREBASE_ADMIN_EMAIL, FIREBASE_ADMIN_PASSWORD, GEMINI_API_KEY })) {
@@ -332,7 +332,7 @@ function validateAnalysis(value) {
     const sourceDocuments = item.sourceIds.map(id => articleById.get(id));
     if (item.sourceIds.some(id => usedDocumentIds.has(id))) errors.push(`${item.category} 동일 공식 자료 중복 사용`);
     item.sourceIds.forEach(id => usedDocumentIds.add(id));
-    if (!item.title || item.title.length < 6 || item.title.length > 80 || /[.!?。！？]$/.test(item.title)) {
+    if (!item.title || item.title.length < 6 || item.title.length > 42 || /[.!?。！？]$/.test(item.title)) {
       errors.push(`${item.category} 제목 길이 또는 형식 오류`);
     }
     if (neutralityBlocklist.test(item.title)) errors.push(`${item.category} 감정·논평 표현 포함`);
