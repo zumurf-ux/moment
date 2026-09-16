@@ -192,20 +192,20 @@ if (articles.length < 3) {
 
 const prompt = `당신은 한국어 일간 브리핑 '잠시'의 공공정보 편집 AI다. 입력은 ${sourceDate} 00:00~23:59(KST)에 국가기관·공공기관이 직접 공개한 공식 자료뿐이다.
 
-목표는 공식 자료에서 국민에게 실제 영향이 큰 확정 사실을 골라 짧고 독립적인 문장으로 새로 작성하는 것이다.
+목표는 공식 자료를 분야별로 종합 검토한 뒤 국민에게 실제 영향이 큰 확정 사실을 골라, 공개 화면에 실을 짧은 제목만 새로 작성하는 것이다.
 
 편집 규칙:
-1. 결과는 3~8개다. 자료가 없는 분야를 억지로 채우지 말고 정책, 경제·금융, 사회, 국제, 생활·안전, 과학·기술, 문화·예술, 스포츠를 가능한 고르게 검토한다.
+1. 결과는 3~8개다. 정책, 경제·금융, 사회, 국제, 생활·안전, 과학·기술, 문화·예술, 스포츠를 모두 검토하고 같은 분야는 최대 1개만 고른다. 다만 확인 가능한 자료가 없는 분야는 허위로 채우지 않는다.
 2. 국민 영향도 30%·안전성 25%·최신성 25%·검증도 20%로 정렬하며 1번이 메인 이슈다.
 3. 보도자료의 홍보성 표현, 장관 발언, 전망, 평가, 구호는 제거하고 시행·발표·수치·일정·경보·의결처럼 확인된 사실만 쓴다.
 4. 원자료 제목과 설명의 문장, 어순, 표현을 복사하거나 일부 단어만 바꿔 쓰지 않는다. 주체·행위·날짜·수치의 사실요소만 추출한 뒤 완전히 새로운 문장으로 작성한다.
 5. 직접 인용, 따옴표 인용, 사진·도표·그래픽 설명은 사용하지 않는다.
-6. 제목은 구체적인 주어와 확정된 결과를 담고, 요약은 1~2문장·120자 이내로 쓴다.
+6. 공개 콘텐츠는 제목뿐이다. 제목은 14~42자, 한 문장으로 쓰고 구체적인 주체·결과·핵심 수치를 포함한다. 마침표, 감탄문, 질문, 낚시성 표현은 쓰지 않는다.
 7. 같은 사건의 공식 자료가 여러 개면 sourceIds에 함께 기록하고, 하나뿐이면 해당 공식 원자료 하나만 기록한다.
 8. 입력에 없는 사실·기관·식별자를 만들지 않는다.
 
 JSON만 출력한다.
-{"items":[{"category":"지정된 분야 중 하나","title":"새로 작성한 구체적 사실 제목","summary":"120자 이내 독립 작성 요약","sourceIds":["입력 id"],"score":0,"reason":"선정 근거","factors":{"freshness":0,"impact":0,"safety":0,"verification":0}}]}
+{"items":[{"category":"지정된 분야 중 하나","title":"14~42자의 새로 작성한 사실 제목","sourceIds":["입력 id"],"score":0,"reason":"선정 근거","factors":{"freshness":0,"impact":0,"safety":0,"verification":0}}]}
 
 공식 자료 후보: ${JSON.stringify(articles)}`;
 
@@ -281,14 +281,6 @@ const copiesSourceExpression = (generated, sourceText) => {
 };
 
 const normalizeGeneratedText = value => String(value || '').replace(/\s+/g, ' ').trim();
-const shortenSummary = value => {
-  const text = normalizeGeneratedText(value);
-  if (text.length <= 120) return text;
-  const firstSentence = text.match(/^.*?[.!?。](?:\s|$)/)?.[0]?.trim();
-  if (firstSentence && firstSentence.length <= 120) return firstSentence;
-  return `${text.slice(0, 117).trimEnd()}…`;
-};
-
 function validateAnalysis(value) {
   const errors = [];
   if (!Array.isArray(value?.items) || value.items.length < 3 || value.items.length > 8) {
@@ -296,8 +288,11 @@ function validateAnalysis(value) {
     return errors;
   }
   const usedDocumentIds = new Set();
+  const usedCategories = new Set();
   for (const item of value.items) {
     if (!allowedCategories.has(item.category)) errors.push(`허용되지 않은 분야: ${item.category}`);
+    if (usedCategories.has(item.category)) errors.push(`${item.category} 분야가 중복됨`);
+    usedCategories.add(item.category);
     if (!Array.isArray(item.sourceIds) || item.sourceIds.length < 1 || item.sourceIds.some(id => !articleById.has(id))) {
       errors.push(`${item.category} 공식 자료 식별자 오류`);
       continue;
@@ -305,14 +300,15 @@ function validateAnalysis(value) {
     const sourceDocuments = item.sourceIds.map(id => articleById.get(id));
     if (item.sourceIds.some(id => usedDocumentIds.has(id))) errors.push(`${item.category} 동일 공식 자료 중복 사용`);
     item.sourceIds.forEach(id => usedDocumentIds.add(id));
-    if (!item.title || !item.summary || item.summary.length > 120) errors.push(`${item.category} 제목 또는 요약 형식 오류`);
-    if (neutralityBlocklist.test(`${item.title} ${item.summary}`)) errors.push(`${item.category} 감정·논평 표현 포함`);
-    if (/경질|사퇴|해임|비난|공방|의원.*요구/.test(`${item.title} ${item.summary}`)) {
+    if (!item.title || item.title.length < 14 || item.title.length > 42 || /[.!?。！？]$/.test(item.title)) {
+      errors.push(`${item.category} 제목 길이 또는 형식 오류`);
+    }
+    if (neutralityBlocklist.test(item.title)) errors.push(`${item.category} 감정·논평 표현 포함`);
+    if (/경질|사퇴|해임|비난|공방|의원.*요구/.test(item.title)) {
       errors.push(`${item.category}에 주장·공방 표현 포함`);
     }
     for (const sourceDocument of sourceDocuments) {
-      if (copiesSourceExpression(item.title, sourceDocument.title)
-        || copiesSourceExpression(item.summary, sourceDocument.summary)) {
+      if (copiesSourceExpression(item.title, sourceDocument.title)) {
         errors.push(`${item.category} 원자료 표현과 지나치게 유사함`);
       }
     }
@@ -324,7 +320,7 @@ let analysis;
 let validationErrors = [];
 let modelUsed = MODEL;
 for (let attempt = 1; attempt <= 3; attempt += 1) {
-  const correction = attempt === 1 ? '' : `\n\n이전 응답은 다음 검증에 실패했다: ${validationErrors.join(' / ')}. 원자료의 제목·설명 표현을 반복하지 말고 사실요소만 이용해 완전히 새로운 문장으로 3~8개를 다시 작성하라.`;
+  const correction = attempt === 1 ? '' : `\n\n이전 응답은 다음 검증에 실패했다: ${validationErrors.join(' / ')}. 원자료 표현을 반복하지 말고 사실요소만 이용해 분야 중복 없이 14~42자의 새로운 제목 3~8개를 다시 작성하라.`;
   const aiRequest = await requestAi({
     systemInstruction: { parts: [{ text: '국가·공공기관 공식 자료의 사실요소만 근거로 삼고 원자료 표현을 복제하지 않은 한국어 사실 JSON만 출력한다.' }] },
     contents: [{ role: 'user', parts: [{ text: prompt + correction }] }],
@@ -351,7 +347,6 @@ for (let attempt = 1; attempt <= 3; attempt += 1) {
         analysis.items = analysis.items.map(item => ({
           ...item,
           title: normalizeGeneratedText(item.title),
-          summary: shortenSummary(item.summary),
         }));
       }
       validationErrors = validateAnalysis(analysis);
@@ -379,8 +374,8 @@ const editionItems = analysis.items.map((item, index) => ({
   order: index + 1,
   category: item.category,
   title: item.title,
-  summary: item.summary,
-  sourceName: item.sourceNames.join(' · '),
+  summary: '',
+  sourceName: '',
   sourceUrl: '',
   sourceNames: item.sourceNames,
   sourceUrls: item.sourceUrls,
@@ -391,19 +386,19 @@ const editionItems = analysis.items.map((item, index) => ({
   selectionScore: Number(item.score || 0),
   selectionReason: item.reason,
 }));
-const editionId = `daily-${publishDate}-official-v4`;
+const editionId = `daily-${publishDate}-official-v5`;
 const edition = {
-  type: 'daily', publishDate, sourceDate, visibleAt, version: 4, status: 'PUBLISHED',
+  type: 'daily', publishDate, sourceDate, visibleAt, version: 5, status: 'PUBLISHED',
   headline: `${Number(sourceDate.slice(5, 7))}월 ${Number(sourceDate.slice(8, 10))}일 핵심 이슈`,
   sourceWindowStart: `${sourceDate}T00:00:00+09:00`, sourceWindowEnd: `${sourceDate}T23:59:59+09:00`,
   items: editionItems,
   sourceCount: new Set(analysis.items.flatMap(item => item.sourceNames)).size,
   reviewedAt: new Date().toISOString(),
-  reviewMode: '국가·공공기관 직접 제공 자료만 수집·원문 표현 유사도 차단·AI 사실요소 재작성',
+  reviewMode: '국가·공공기관 직접 제공 자료만 수집·전 분야 분석·원문 표현 유사도 차단·AI 사실 제목만 공개',
   politicalToneEnabled: false,
   privateMediaExcluded: true,
   selectionModel: `Gemini ${modelUsed}`,
-  selectionFactors: '국가·공공기관 공식 자료만 사용·민간 언론·포털 제외·원자료 표현 복제 차단·최신성 25%·국민 영향도 30%·안전성 25%·검증도 20%',
+  selectionFactors: '국가·공공기관 공식 자료만 사용·민간 언론·포털 제외·분야별 최대 1개·제목만 공개·원자료 표현 복제 차단·최신성 25%·국민 영향도 30%·안전성 25%·검증도 20%',
 };
 
 function firestoreValue(value) {
@@ -425,7 +420,7 @@ async function setDocument(collectionName, id, data) {
 
 await setDocument('editions', editionId, edition);
 await Promise.all(analysis.items.map((item, index) => setDocument('candidates', `${sourceDate}-${index + 1}`, {
-  category: item.category, title: item.title, summary: item.summary,
+  category: item.category, title: item.title, summary: '',
   sourceName: item.sourceNames.join(' · '), sourceNames: item.sourceNames, sourceUrls: item.sourceUrls,
   sourceUrl: item.sourceUrls[0], factDate: sourceDate.replaceAll('-', '.'), sourceDate,
   sourceLicenses: item.sourceLicenses,
