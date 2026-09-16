@@ -10,7 +10,7 @@ const DATABASE_ID = '(default)';
 const { FIREBASE_API_KEY, FIREBASE_ADMIN_EMAIL, FIREBASE_ADMIN_PASSWORD, GEMINI_API_KEY } = process.env;
 const MODEL = process.env.AI_MODEL || 'gemini-3.1-flash-lite';
 const MODEL_CANDIDATES = [...new Set([MODEL, 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'])];
-const EDITION_VERSION = 9;
+const EDITION_VERSION = 10;
 const wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 
 for (const [name, value] of Object.entries({ FIREBASE_API_KEY, FIREBASE_ADMIN_EMAIL, FIREBASE_ADMIN_PASSWORD, GEMINI_API_KEY })) {
@@ -192,20 +192,23 @@ if (articles.length < 2) {
 
 const prompt = `당신은 한국어 일간 브리핑 '잠시'의 공공정보 편집 AI다. 입력은 ${sourceDate} 00:00~23:59(KST)에 국가기관·공공기관이 직접 공개한 공식 자료뿐이다.
 
-목표는 공식 자료를 분야별로 종합 검토한 뒤 국민에게 실제 영향이 큰 확정 사실을 골라, 공개 화면에 실을 짧은 제목만 새로 작성하는 것이다.
+목표는 공식 자료를 분야별로 종합 검토하고, 공식 후보가 없는 분야만 Google 검색으로 전날의 공개 사실을 교차 확인해 8개 전 분야의 짧은 제목을 새로 작성하는 것이다.
 
 편집 규칙:
-1. 결과는 2~8개다. 정책, 경제·금융, 사회, 국제, 생활·안전, 과학·기술, 문화·예술, 스포츠를 모두 검토하고 같은 분야는 최대 1개만 고른다. 다만 확인 가능한 자료가 없는 분야는 허위로 채우지 않는다.
+1. 결과는 정확히 8개다. 정책, 경제·금융, 사회, 국제, 생활·안전, 과학·기술, 문화·예술, 스포츠를 각 1개씩 작성한다.
 2. 국민 영향도 30%·안전성 25%·최신성 25%·검증도 20%로 정렬하며 1번이 메인 이슈다.
 3. 보도자료의 홍보성 표현, 장관 발언, 전망, 평가, 구호는 제거하고 시행·발표·수치·일정·경보·의결처럼 확인된 사실만 쓴다.
 4. 원자료 제목과 설명의 문장, 어순, 표현을 복사하거나 일부 단어만 바꿔 쓰지 않는다. 주체·행위·날짜·수치의 사실요소만 추출한 뒤 완전히 새로운 문장으로 작성한다.
 5. 직접 인용, 따옴표 인용, 사진·도표·그래픽 설명은 사용하지 않는다.
 6. 공개 콘텐츠는 제목뿐이다. 제목은 6~36자를 목표로 한 문장을 끝까지 완성하고, 구체적인 주체·결과·핵심 수치를 포함한다. '은/는 …에 맞춰'처럼 설명을 늘이지 말고 '코스피 7,000선 돌파', '기준금리 연 3.00%로 동결'처럼 핵심 결과로 끝낸다. 마침표, 감탄문, 질문, 낚시성 표현은 쓰지 않는다.
-7. 같은 사건의 공식 자료가 여러 개면 sourceIds에 함께 기록하고, 하나뿐이면 해당 공식 원자료 하나만 기록한다.
-8. 입력에 없는 사실·기관·식별자를 만들지 않는다.
+7. 입력된 공식 자료로 확인된 항목은 sourceIds에 해당 id를 기록하고 sourceNames와 sourceUrls는 빈 배열로 둔다.
+8. 해당 분야의 적절한 공식 후보가 입력에 없을 때만 Google 검색을 사용한다. ${sourceDate} 안에 실제 발생·발표·마감·확정된 사실을 서로 다른 기관 또는 매체의 직접 열람 가능한 HTTPS URL 2개 이상으로 확인하고, sourceIds는 빈 배열, sourceNames와 sourceUrls에 확인처를 기록한다. 검색결과 목록·홈페이지 대표 URL·전망·예정·소문·주장·해설은 금지한다.
+9. 스포츠는 확정 경기 결과·기록, 국제는 확정된 정부·국제기구 발표나 실제 발생 사건, 금융은 마감 지수·공표 지표처럼 날짜와 수치를 검증할 수 있는 사실을 우선한다.
+10. 기사나 검색 결과 제목을 복사하지 않고 공통 사실요소만으로 새 제목을 만든다. 근거가 부족하면 그럴듯하게 만들지 말고 응답을 {"error":"검증 근거 부족: 분야"}로 끝낸다.
+11. 입력에 없는 공식 자료 식별자를 만들지 않는다.
 
 JSON만 출력한다.
-{"items":[{"category":"지정된 분야 중 하나","title":"6~36자의 완결된 사실 제목","sourceIds":["입력 id"],"score":0,"reason":"선정 근거","factors":{"freshness":0,"impact":0,"safety":0,"verification":0}}]}
+{"items":[{"category":"지정된 분야 중 하나","title":"6~36자의 완결된 사실 제목","sourceIds":["입력 id 또는 빈 배열"],"sourceNames":["검색 확인처 또는 빈 배열"],"sourceUrls":["검색 근거 URL 또는 빈 배열"],"score":0,"reason":"선정·검증 근거","factors":{"freshness":0,"impact":0,"safety":0,"verification":0}}]}
 
 공식 자료 후보: ${JSON.stringify(articles)}`;
 
@@ -332,8 +335,8 @@ const parseFirstJsonObject = raw => {
 };
 function validateAnalysis(value) {
   const errors = [];
-  if (!Array.isArray(value?.items) || value.items.length < 2 || value.items.length > 8) {
-    errors.push(`결과 개수 ${Array.isArray(value?.items) ? value.items.length : 0}개(허용 2~8개)`);
+  if (!Array.isArray(value?.items) || value.items.length !== 8) {
+    errors.push(`결과 개수 ${Array.isArray(value?.items) ? value.items.length : 0}개(필수 8개)`);
     return errors;
   }
   const usedDocumentIds = new Set();
@@ -342,13 +345,19 @@ function validateAnalysis(value) {
     if (!allowedCategories.has(item.category)) errors.push(`허용되지 않은 분야: ${item.category}`);
     if (usedCategories.has(item.category)) errors.push(`${item.category} 분야가 중복됨`);
     usedCategories.add(item.category);
-    if (!Array.isArray(item.sourceIds) || item.sourceIds.length < 1 || item.sourceIds.some(id => !articleById.has(id))) {
-      errors.push(`${item.category} 공식 자료 식별자 오류`);
-      continue;
+    const sourceIds = Array.isArray(item.sourceIds) ? item.sourceIds : [];
+    const usesOfficialSource = sourceIds.length > 0;
+    const sourceDocuments = usesOfficialSource ? sourceIds.filter(id => articleById.has(id)).map(id => articleById.get(id)) : [];
+    if (usesOfficialSource && sourceDocuments.length !== sourceIds.length) errors.push(`${item.category} 공식 자료 식별자 오류`);
+    if (usesOfficialSource && sourceIds.some(id => usedDocumentIds.has(id))) errors.push(`${item.category} 동일 공식 자료 중복 사용`);
+    sourceIds.forEach(id => usedDocumentIds.add(id));
+    if (!usesOfficialSource) {
+      const urls = [...new Set((Array.isArray(item.sourceUrls) ? item.sourceUrls : []).filter(isUsableEvidenceUrl))];
+      const hosts = new Set(urls.map(normalizedHostname).filter(Boolean));
+      if (urls.length < 2 || hosts.size < 2) errors.push(`${item.category} 독립 확인 URL 부족`);
+      item.sourceUrls = urls;
+      item.sourceNames = [...new Set((Array.isArray(item.sourceNames) ? item.sourceNames : []).map(normalizeGeneratedText).filter(Boolean))];
     }
-    const sourceDocuments = item.sourceIds.map(id => articleById.get(id));
-    if (item.sourceIds.some(id => usedDocumentIds.has(id))) errors.push(`${item.category} 동일 공식 자료 중복 사용`);
-    item.sourceIds.forEach(id => usedDocumentIds.add(id));
     if (!item.title || item.title.length < 6 || item.title.length > 42 || /[.!?。！？]$/.test(item.title)) {
       errors.push(`${item.category} 제목 길이 또는 형식 오류`);
     }
@@ -369,10 +378,11 @@ let analysis;
 let validationErrors = [];
 let modelUsed = MODEL;
 for (let attempt = 1; attempt <= 3; attempt += 1) {
-  const correction = attempt === 1 ? '' : `\n\n이전 응답은 다음 검증에 실패했다: ${validationErrors.join(' / ')}. 원자료 표현을 반복하지 말고 사실요소만 이용해 분야 중복 없이 6~36자를 목표로 한 완결된 제목 2~8개를 다시 작성하라.`;
+  const correction = attempt === 1 ? '' : `\n\n이전 응답은 다음 검증에 실패했다: ${validationErrors.join(' / ')}. 공식 후보와 Google 검색을 다시 확인하고 원문 표현을 반복하지 말며, 8개 분야별로 6~36자의 완결된 사실 제목을 정확히 1개씩 다시 작성하라.`;
   const aiRequest = await requestAi({
-    systemInstruction: { parts: [{ text: '국가·공공기관 공식 자료의 사실요소만 근거로 삼고 원자료 표현을 복제하지 않은 한국어 사실 JSON만 출력한다.' }] },
+    systemInstruction: { parts: [{ text: '공식 1차 자료를 우선하고 부족한 분야만 Google 검색으로 교차 검증하며, 원문 표현을 복제하지 않은 한국어 사실 JSON만 출력한다.' }] },
     contents: [{ role: 'user', parts: [{ text: prompt + correction }] }],
+    tools: [{ googleSearch: {} }],
     generationConfig: { temperature: 0, responseMimeType: 'application/json', maxOutputTokens: 4096 },
   });
   const { response: aiResponse, model } = aiRequest;
@@ -409,98 +419,32 @@ for (let attempt = 1; attempt <= 3; attempt += 1) {
 if (validationErrors.length > 0) throw new Error(`AI 결과 검증 3회 실패: ${validationErrors.join(' / ')}`);
 
 const verifiedItems = analysis.items.map(item => {
-  const sourceDocuments = item.sourceIds.map(id => articleById.get(id));
+  const sourceIds = Array.isArray(item.sourceIds) ? item.sourceIds : [];
+  const sourceDocuments = sourceIds.map(id => articleById.get(id)).filter(Boolean);
+  const isPublicFactFallback = sourceDocuments.length === 0;
   return {
     ...item,
-    sourceNames: [...new Set(sourceDocuments.map(document => document.sourceName))],
-    sourceUrls: [...new Set(sourceDocuments.map(document => document.url))],
-    sourceLicenses: [...new Set(sourceDocuments.map(document => document.license))],
+    sourceIds,
+    sourceNames: isPublicFactFallback
+      ? [...new Set((item.sourceNames || []).map(normalizeGeneratedText).filter(Boolean))]
+      : [...new Set(sourceDocuments.map(document => document.sourceName))],
+    sourceUrls: isPublicFactFallback
+      ? [...new Set((item.sourceUrls || []).filter(isUsableEvidenceUrl))]
+      : [...new Set(sourceDocuments.map(document => document.url))],
+    sourceLicenses: isPublicFactFallback
+      ? ['공개 웹 교차 검증·문장 비복제']
+      : [...new Set(sourceDocuments.map(document => document.license))],
+    isPublicFactFallback,
   };
 });
 verifiedItems.sort((a, b) => Number(b.score || 0) - Number(a.score || 0));
 
 const verifiedCategories = new Set(verifiedItems.map(item => item.category));
 const missingCategories = TARGET_CATEGORIES.filter(category => !verifiedCategories.has(category));
-let publicFactItems = [];
-
-if (missingCategories.length) {
-  const fallbackPrompt = `당신은 한국어 일간 브리핑 '잠시'의 사실 검증 편집자다. 공식 보도자료 후보에서 선정되지 않은 분야를, 공개 웹에서 누구나 교차 확인할 수 있는 전날의 사실로 채운다.
-
-기준 날짜: ${sourceDate} 00:00~23:59(KST)
-채워야 할 분야: ${missingCategories.join(', ')}
-
-필수 규칙:
-1. 지정된 각 분야마다 정확히 1개씩 작성한다. 빠뜨리거나 다른 분야를 추가하지 않는다.
-2. 기준 날짜 안에 실제로 발생·발표·마감·확정된 사건만 쓴다. 오늘의 전망, 예정, 소문, 주장, 사설, 해설은 제외한다.
-3. 검색 결과 제목을 복사하지 않는다. 여러 공개 자료에서 공통으로 확인되는 주체·행위·날짜·수치만 추출해 6~36자의 새로운 한국어 제목으로 작성한다.
-4. 정치적 평가·진영 표현·감정적 단어·낚시성 표현을 쓰지 않는다.
-5. 각 사실마다 서로 다른 기관 또는 매체의 직접 열람 가능한 HTTPS 근거 URL을 최소 2개 넣는다. 검색결과 목록 URL과 홈페이지 대표 URL은 금지한다.
-6. 스포츠는 확정된 경기 결과·기록, 국제는 확정된 국제기구·정부 발표 또는 실제 발생 사건, 경제·금융은 시장 마감 수치·공표 지표처럼 검증 가능한 사실을 우선한다.
-7. 확인 근거가 부족하면 그럴듯하게 만들지 말고 전체 응답을 {"error":"검증 근거 부족: 분야"}로 끝낸다.
-8. 기사·보도자료의 문장이나 요약은 가져오지 않으며 공개 화면에는 새로 만든 제목만 사용한다.
-
-JSON만 출력한다.
-{"items":[{"category":"지정 분야","title":"6~36자의 완결된 사실 제목","sourceNames":["확인처1","확인처2"],"sourceUrls":["https://...","https://..."],"score":0,"reason":"두 근거로 확인된 사실요소","factors":{"freshness":0,"impact":0,"safety":0,"verification":0}}]}`;
-
-  let fallbackErrors = [];
-  for (let attempt = 1; attempt <= 3; attempt += 1) {
-    const correction = attempt === 1 ? '' : `\n\n이전 결과 검증 실패: ${fallbackErrors.join(' / ')}. 날짜와 URL을 다시 검색해 지정 분야별로 정확히 한 개씩 다시 작성하라.`;
-    const fallbackRequest = await requestAi({
-      systemInstruction: { parts: [{ text: 'Google 검색으로 전날의 공개 사실을 교차 검증하되, 검색 결과나 기사 제목을 복제하지 않고 사실요소만으로 새 제목을 작성한다.' }] },
-      contents: [{ role: 'user', parts: [{ text: fallbackPrompt + correction }] }],
-      tools: [{ googleSearch: {} }],
-      generationConfig: { temperature: 0, maxOutputTokens: 4096 },
-    });
-    modelUsed = fallbackRequest.model;
-    const payload = await fallbackRequest.response.json();
-    const raw = payload.candidates?.[0]?.content?.parts?.map(part => part.text || '').join('').replace(/^```json\s*|\s*```$/g, '').trim();
-    try {
-      const parsed = parseFirstJsonObject(raw || '');
-      const items = Array.isArray(parsed?.items) ? parsed.items : [];
-      fallbackErrors = [];
-      if (items.length !== missingCategories.length) fallbackErrors.push(`결과 ${items.length}개, 필요 ${missingCategories.length}개`);
-      const seen = new Set();
-      for (const item of items) {
-        item.title = normalizeTitle(item.title);
-        if (!missingCategories.includes(item.category)) fallbackErrors.push(`지정되지 않은 분야 ${item.category}`);
-        if (seen.has(item.category)) fallbackErrors.push(`${item.category} 중복`);
-        seen.add(item.category);
-        if (!item.title || item.title.length < 6 || item.title.length > 42 || /[.!?。！？]$/.test(item.title)) {
-          fallbackErrors.push(`${item.category} 제목 형식 오류`);
-        }
-        if (neutralityBlocklist.test(item.title) || /경질|사퇴|해임|비난|공방|의원.*요구/.test(item.title)) {
-          fallbackErrors.push(`${item.category} 논평·주장 표현 포함`);
-        }
-        const urls = [...new Set((Array.isArray(item.sourceUrls) ? item.sourceUrls : []).filter(isUsableEvidenceUrl))];
-        const hosts = new Set(urls.map(normalizedHostname).filter(Boolean));
-        if (urls.length < 2 || hosts.size < 2) fallbackErrors.push(`${item.category} 독립 확인 URL 부족`);
-        item.sourceUrls = urls;
-        item.sourceNames = [...new Set((Array.isArray(item.sourceNames) ? item.sourceNames : []).map(normalizeGeneratedText).filter(Boolean))];
-      }
-      for (const category of missingCategories) {
-        if (!seen.has(category)) fallbackErrors.push(`${category} 누락`);
-      }
-      if (!fallbackErrors.length) {
-        publicFactItems = items.map(item => ({
-          ...item,
-          sourceIds: [],
-          sourceLicenses: ['공개 웹 교차 검증·문장 비복제'],
-          isPublicFactFallback: true,
-        }));
-        break;
-      }
-    } catch (error) {
-      fallbackErrors = [`검색 검증 JSON 오류: ${error.message}`];
-    }
-    console.warn(`공개 사실 보완 ${attempt}차 검증 실패: ${fallbackErrors.join(' / ')}`);
-  }
-  if (fallbackErrors.length) throw new Error(`빈 분야 공개 사실 검증 3회 실패: ${fallbackErrors.join(' / ')}`);
-}
-
-const combinedItemsByCategory = new Map([...verifiedItems, ...publicFactItems].map(item => [item.category, item]));
-analysis.items = TARGET_CATEGORIES.map(category => combinedItemsByCategory.get(category));
-if (analysis.items.some(item => !item)) throw new Error('8개 분야 중 확인된 사실이 없는 분야가 있어 발행을 중단합니다.');
-analysis.items.sort((a, b) => Number(b.score || 0) - Number(a.score || 0));
+if (missingCategories.length) throw new Error(`8개 분야 누락: ${missingCategories.join(', ')}`);
+const publicFactItems = verifiedItems.filter(item => item.isPublicFactFallback);
+const officialFactItems = verifiedItems.filter(item => !item.isPublicFactFallback);
+analysis.items = verifiedItems;
 
 const editionItems = analysis.items.map((item, index) => ({
   order: index + 1,
@@ -526,7 +470,7 @@ const edition = {
   headline: `${Number(sourceDate.slice(5, 7))}월 ${Number(sourceDate.slice(8, 10))}일 핵심 이슈`,
   sourceWindowStart: `${sourceDate}T00:00:00+09:00`, sourceWindowEnd: `${sourceDate}T23:59:59+09:00`,
   items: editionItems,
-  sourceCount: new Set(verifiedItems.flatMap(item => item.sourceNames)).size,
+  sourceCount: new Set(analysis.items.flatMap(item => item.sourceNames)).size,
   reviewedAt: new Date().toISOString(),
   reviewMode: '공식 1차 자료 우선·빈 분야는 공개 웹 2개 이상 교차 검증·8개 전 분야 사실 제목만 공개',
   politicalToneEnabled: false,
@@ -568,11 +512,11 @@ await setDocument('auditLogs', `auto-publish-${publishDate}`, {
   action: 'daily.auto_published', entityType: 'editions', entityId: editionId,
   actorEmail: 'github-actions@jamsi', sourceDate, publishDate, visibleAt, model: modelUsed,
   categoryCoverage: TARGET_CATEGORIES,
-  officialCategoryCoverage: [...verifiedCategories],
+  officialCategoryCoverage: officialFactItems.map(item => item.category),
   publicWebFilledCategories: publicFactItems.map(item => item.category),
   representativeSourceCount: new Set(analysis.items.flatMap(item => item.sourceNames)).size,
   privateMediaTextRepublished: false,
   publicWebVerificationEnabled: true,
   createdAt: new Date().toISOString(),
 });
-console.log(`${sourceDate} 공식 사실 ${verifiedItems.length}개와 공개 웹 교차 검증 사실 ${publicFactItems.length}개로 8개 분야 발행 완료 → ${visibleAt} 공개 예약`);
+console.log(`${sourceDate} 공식 사실 ${officialFactItems.length}개와 공개 웹 교차 검증 사실 ${publicFactItems.length}개로 8개 분야 발행 완료 → ${visibleAt} 공개 예약`);
