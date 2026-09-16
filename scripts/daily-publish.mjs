@@ -297,11 +297,13 @@ const prompt = `당신은 한국어 일간 브리핑 '잠시'의 사실 편집 A
 7. 입력된 공식 자료로 확인된 항목은 sourceIds에 해당 id를 기록하고 publicIds는 빈 배열로 둔다.
 8. 해당 분야의 적절한 공식 후보가 없을 때만 같은 분야의 공개 사실 후보를 사용한다. ${sourceDate} 안에 실제 발생·발표·마감·확정된 동일 사실을 서로 다른 확인처 2곳 이상에서 찾아 publicIds에 기록하고 sourceIds는 빈 배열로 둔다. 아래 '교차 확인 후보 쌍'을 우선 사용하며 전망·예정·소문·주장·해설은 금지한다.
 9. 스포츠는 확정 경기 결과·기록, 국제는 확정된 정부·국제기구 발표나 실제 발생 사건, 금융은 마감 지수·공표 지표처럼 날짜와 수치를 검증할 수 있는 사실을 우선한다.
-10. 기사나 공개 RSS 제목을 복사하지 않고 여러 후보에 공통인 사실요소만으로 새 제목을 만든다. 근거가 부족하면 그럴듯하게 만들지 말고 응답을 {"error":"검증 근거 부족: 분야"}로 끝낸다.
+10. 기사나 공개 RSS 제목을 복사하지 않고 여러 후보에 공통인 사실요소만으로 새 제목을 만든다. 출력 객체의 8개 분야 키를 하나도 빼거나 추가하지 않는다.
 11. 입력에 없는 공식 자료 식별자를 만들지 않는다.
 
 JSON만 출력한다.
-{"items":[{"category":"지정된 분야 중 하나","title":"6~36자의 완결된 사실 제목","sourceIds":["공식 후보 id 또는 빈 배열"],"publicIds":["공개 후보 id 2개 이상 또는 빈 배열"],"score":0,"reason":"선정·검증 근거","factors":{"freshness":0,"impact":0,"safety":0,"verification":0}}]}
+{"categories":${JSON.stringify(Object.fromEntries(TARGET_CATEGORIES.map(category => [category, { title: '6~36자의 완결된 사실 제목', sourceIds: [], publicIds: [], score: 0, reason: '선정·검증 근거', factors: { freshness: 0, impact: 0, safety: 0, verification: 0 } }])))}}
+
+각 분야 값은 정책 예시와 동일한 필드를 모두 포함한다. categories 밖에 다른 필드를 만들지 않는다.
 
 공식 자료 후보: ${JSON.stringify(articles)}
 
@@ -469,7 +471,7 @@ let analysis;
 let validationErrors = [];
 let modelUsed = MODEL;
 for (let attempt = 1; attempt <= 5; attempt += 1) {
-  const correction = attempt === 1 ? '' : `\n\n이전 응답은 다음 검증에 실패했다: ${validationErrors.join(' / ')}. 공식 후보와 공개 RSS 후보를 다시 확인하고 원문 표현을 반복하지 말며, 8개 분야별로 6~36자의 완결된 사실 제목을 정확히 1개씩 다시 작성하라.`;
+  const correction = attempt === 1 ? '' : `\n\n이전 응답은 다음 검증에 실패했다: ${validationErrors.join(' / ')}. categories 객체에 정책, 경제·금융, 사회, 국제, 생활·안전, 과학·기술, 문화·예술, 스포츠 키를 정확히 한 번씩 모두 넣고, 각 값에 완결된 사실 제목과 검증 ID를 다시 작성하라.`;
   const aiRequest = await requestAi({
     systemInstruction: { parts: [{ text: '공식 1차 자료를 우선하고 부족한 분야는 공개 RSS의 서로 다른 확인처 2곳 이상으로 교차 검증하며, 원문 표현을 복제하지 않은 한국어 사실 JSON만 출력한다.' }] },
     contents: [{ role: 'user', parts: [{ text: prompt + correction }] }],
@@ -484,7 +486,13 @@ for (let attempt = 1; attempt <= 5; attempt += 1) {
   } else {
     try {
       const parsed = parseFirstJsonObject(raw);
-      if (Array.isArray(parsed)) {
+      if (parsed?.categories && typeof parsed.categories === 'object' && !Array.isArray(parsed.categories)) {
+        analysis = {
+          items: TARGET_CATEGORIES
+            .filter(category => parsed.categories[category] && typeof parsed.categories[category] === 'object')
+            .map(category => ({ category, ...parsed.categories[category] })),
+        };
+      } else if (Array.isArray(parsed)) {
         analysis = { items: parsed };
       } else if (Array.isArray(parsed?.items)) {
         analysis = parsed;
