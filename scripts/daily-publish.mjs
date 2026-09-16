@@ -10,6 +10,7 @@ const DATABASE_ID = '(default)';
 const { FIREBASE_API_KEY, FIREBASE_ADMIN_EMAIL, FIREBASE_ADMIN_PASSWORD, GEMINI_API_KEY } = process.env;
 const MODEL = process.env.AI_MODEL || 'gemini-3.1-flash-lite';
 const MODEL_CANDIDATES = [...new Set([MODEL, 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'])];
+const EDITION_VERSION = 6;
 const wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 
 for (const [name, value] of Object.entries({ FIREBASE_API_KEY, FIREBASE_ADMIN_EMAIL, FIREBASE_ADMIN_PASSWORD, GEMINI_API_KEY })) {
@@ -72,7 +73,8 @@ async function hasPublishedEditionForDate() {
   if (!response.ok) throw new Error(`기존 발행본 확인 실패: ${response.status} ${await response.text()}`);
   const rows = await response.json();
   return rows.some(row => row.document?.fields?.type?.stringValue === 'daily'
-    && row.document?.fields?.status?.stringValue === 'PUBLISHED');
+    && row.document?.fields?.status?.stringValue === 'PUBLISHED'
+    && Number(row.document?.fields?.version?.integerValue || 0) >= EDITION_VERSION);
 }
 
 if (await hasPublishedEditionForDate()) {
@@ -198,12 +200,12 @@ const prompt = `당신은 한국어 일간 브리핑 '잠시'의 공공정보 �
 3. 보도자료의 홍보성 표현, 장관 발언, 전망, 평가, 구호는 제거하고 시행·발표·수치·일정·경보·의결처럼 확인된 사실만 쓴다.
 4. 원자료 제목과 설명의 문장, 어순, 표현을 복사하거나 일부 단어만 바꿔 쓰지 않는다. 주체·행위·날짜·수치의 사실요소만 추출한 뒤 완전히 새로운 문장으로 작성한다.
 5. 직접 인용, 따옴표 인용, 사진·도표·그래픽 설명은 사용하지 않는다.
-6. 공개 콘텐츠는 제목뿐이다. 제목은 6~42자, 한 문장으로 쓰고 구체적인 주체·결과·핵심 수치를 포함한다. 마침표, 감탄문, 질문, 낚시성 표현은 쓰지 않는다.
+6. 공개 콘텐츠는 제목뿐이다. 제목은 6~36자를 목표로 한 문장을 끝까지 완성하고, 구체적인 주체·결과·핵심 수치를 포함한다. '은/는 …에 맞춰'처럼 설명을 늘이지 말고 '코스피 7,000선 돌파', '기준금리 연 3.00%로 동결'처럼 핵심 결과로 끝낸다. 마침표, 감탄문, 질문, 낚시성 표현은 쓰지 않는다.
 7. 같은 사건의 공식 자료가 여러 개면 sourceIds에 함께 기록하고, 하나뿐이면 해당 공식 원자료 하나만 기록한다.
 8. 입력에 없는 사실·기관·식별자를 만들지 않는다.
 
 JSON만 출력한다.
-{"items":[{"category":"지정된 분야 중 하나","title":"6~42자의 새로 작성한 사실 제목","sourceIds":["입력 id"],"score":0,"reason":"선정 근거","factors":{"freshness":0,"impact":0,"safety":0,"verification":0}}]}
+{"items":[{"category":"지정된 분야 중 하나","title":"6~36자의 완결된 사실 제목","sourceIds":["입력 id"],"score":0,"reason":"선정 근거","factors":{"freshness":0,"impact":0,"safety":0,"verification":0}}]}
 
 공식 자료 후보: ${JSON.stringify(articles)}`;
 
@@ -282,9 +284,7 @@ const normalizeGeneratedText = value => String(value || '').replace(/\s+/g, ' ')
 const normalizeTitle = value => normalizeGeneratedText(value)
   .replace(/^["'“”‘’]+|["'“”‘’]+$/g, '')
   .replace(/[.!?。！？]+$/g, '')
-  .trim()
-  .slice(0, 42)
-  .trimEnd();
+  .trim();
 
 const parseFirstJsonObject = raw => {
   try {
@@ -332,7 +332,7 @@ function validateAnalysis(value) {
     const sourceDocuments = item.sourceIds.map(id => articleById.get(id));
     if (item.sourceIds.some(id => usedDocumentIds.has(id))) errors.push(`${item.category} 동일 공식 자료 중복 사용`);
     item.sourceIds.forEach(id => usedDocumentIds.add(id));
-    if (!item.title || item.title.length < 6 || item.title.length > 42 || /[.!?。！？]$/.test(item.title)) {
+    if (!item.title || item.title.length < 6 || item.title.length > 80 || /[.!?。！？]$/.test(item.title)) {
       errors.push(`${item.category} 제목 길이 또는 형식 오류`);
     }
     if (neutralityBlocklist.test(item.title)) errors.push(`${item.category} 감정·논평 표현 포함`);
@@ -352,7 +352,7 @@ let analysis;
 let validationErrors = [];
 let modelUsed = MODEL;
 for (let attempt = 1; attempt <= 3; attempt += 1) {
-  const correction = attempt === 1 ? '' : `\n\n이전 응답은 다음 검증에 실패했다: ${validationErrors.join(' / ')}. 원자료 표현을 반복하지 말고 사실요소만 이용해 분야 중복 없이 6~42자의 새로운 제목 2~8개를 다시 작성하라.`;
+  const correction = attempt === 1 ? '' : `\n\n이전 응답은 다음 검증에 실패했다: ${validationErrors.join(' / ')}. 원자료 표현을 반복하지 말고 사실요소만 이용해 분야 중복 없이 6~36자를 목표로 한 완결된 제목 2~8개를 다시 작성하라.`;
   const aiRequest = await requestAi({
     systemInstruction: { parts: [{ text: '국가·공공기관 공식 자료의 사실요소만 근거로 삼고 원자료 표현을 복제하지 않은 한국어 사실 JSON만 출력한다.' }] },
     contents: [{ role: 'user', parts: [{ text: prompt + correction }] }],
@@ -418,9 +418,9 @@ const editionItems = analysis.items.map((item, index) => ({
   selectionScore: Number(item.score || 0),
   selectionReason: item.reason,
 }));
-const editionId = `daily-${publishDate}-official-v5`;
+const editionId = `daily-${publishDate}-official-v${EDITION_VERSION}`;
 const edition = {
-  type: 'daily', publishDate, sourceDate, visibleAt, version: 5, status: 'PUBLISHED',
+  type: 'daily', publishDate, sourceDate, visibleAt, version: EDITION_VERSION, status: 'PUBLISHED',
   headline: `${Number(sourceDate.slice(5, 7))}월 ${Number(sourceDate.slice(8, 10))}일 핵심 이슈`,
   sourceWindowStart: `${sourceDate}T00:00:00+09:00`, sourceWindowEnd: `${sourceDate}T23:59:59+09:00`,
   items: editionItems,
