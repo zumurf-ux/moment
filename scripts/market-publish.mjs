@@ -46,9 +46,18 @@ async function fetchIndex(index) {
       const nowSeconds = Date.now() / 1000;
       const marketIsOpen = regular && nowSeconds >= Number(regular.start) && nowSeconds < Number(regular.end);
       const completed = timestamps
-        .map((timestamp, position) => ({ timestamp: Number(timestamp), close: Number(closes[position]) }))
-        .filter(point => Number.isFinite(point.close))
+        .map((timestamp, position) => ({ timestamp: Number(timestamp), rawClose: closes[position] }))
+        .filter(point => point.rawClose !== null && point.rawClose !== undefined)
+        .map(point => ({ timestamp: point.timestamp, close: Number(point.rawClose) }))
+        .filter(point => Number.isFinite(point.close) && point.close > 0)
         .filter(point => !(marketIsOpen && point.timestamp >= Number(regular.start)));
+      const lastRawClose = closes.at(-1);
+      const fallbackClose = Number(meta.regularMarketPrice);
+      const fallbackTime = Number(meta.regularMarketTime);
+      if (!marketIsOpen && (lastRawClose === null || lastRawClose === undefined)
+        && Number.isFinite(fallbackClose) && fallbackClose > 0 && Number.isFinite(fallbackTime)) {
+        completed.push({ timestamp: fallbackTime, close: fallbackClose });
+      }
       if (completed.length < 2) throw new Error('확정 종가가 부족합니다.');
       const latest = completed.at(-1);
       const prior = completed.at(-2);
