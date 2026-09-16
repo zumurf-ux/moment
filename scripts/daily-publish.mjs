@@ -23,6 +23,7 @@ const TARGET_CATEGORIES = ['정책', '경제·금융', '사회', '국제', '생�
 const OFFICIAL_SOURCES = [
   { id: 'mois', name: '행정안전부', defaultCategory: '생활·안전', url: 'https://www.mois.go.kr/gpms/view/jsp/rss/rss.jsp?ctxCd=1012', allowedHosts: ['www.mois.go.kr'], license: '국가기관 공공저작물' },
   { id: 'bok', name: '한국은행', defaultCategory: '경제·금융', url: 'https://www.bok.or.kr/portal/bbs/B0000552/news.rss?menuNo=200690', allowedHosts: ['www.bok.or.kr'], license: '공공기관 공식 RSS' },
+  { id: 'mods', name: '국가데이터처', defaultCategory: '경제·금융', url: 'https://mods.go.kr/board.es?mid=a10301010000&bid=11471&act=rss', allowedHosts: ['mods.go.kr', 'www.mods.go.kr'], license: '국가기관 공식 통계·공공저작물 이용조건 확인' },
   { id: 'fsc', name: '금융위원회', defaultCategory: '경제·금융', url: 'https://www.fsc.go.kr/about/fsc_bbs_rss/?fid=0111', allowedHosts: ['www.fsc.go.kr', 'fsc.go.kr'], license: '국가기관 공식 RSS·공공저작물 이용조건 확인' },
   { id: 'msit', name: '과학기술정보통신부', defaultCategory: '과학·기술', url: 'https://www.msit.go.kr/user/rss/rss.do?bbsSeqNo=94', allowedHosts: ['www.msit.go.kr'], license: '국가기관 공공저작물' },
   { id: 'mcst', name: '문화체육관광부', defaultCategory: '문화·예술', url: 'https://www.mcst.go.kr/common/rss/press.jsp', allowedHosts: ['www.mcst.go.kr', 'mcst.go.kr'], license: '공공누리 제0·1유형 확인 대상' },
@@ -183,7 +184,7 @@ const articles = collected.filter(article => {
   return true;
 }).slice(0, 80);
 
-if (articles.length < 3) {
+if (articles.length < 2) {
   throw new Error(`${sourceDate} 국가·공공기관 공식 자료가 ${articles.length}개뿐이어서 자동 발행을 중단합니다.`);
 }
 
@@ -192,17 +193,17 @@ const prompt = `당신은 한국어 일간 브리핑 '잠시'의 공공정보 �
 목표는 공식 자료를 분야별로 종합 검토한 뒤 국민에게 실제 영향이 큰 확정 사실을 골라, 공개 화면에 실을 짧은 제목만 새로 작성하는 것이다.
 
 편집 규칙:
-1. 결과는 3~8개다. 정책, 경제·금융, 사회, 국제, 생활·안전, 과학·기술, 문화·예술, 스포츠를 모두 검토하고 같은 분야는 최대 1개만 고른다. 다만 확인 가능한 자료가 없는 분야는 허위로 채우지 않는다.
+1. 결과는 2~8개다. 정책, 경제·금융, 사회, 국제, 생활·안전, 과학·기술, 문화·예술, 스포츠를 모두 검토하고 같은 분야는 최대 1개만 고른다. 다만 확인 가능한 자료가 없는 분야는 허위로 채우지 않는다.
 2. 국민 영향도 30%·안전성 25%·최신성 25%·검증도 20%로 정렬하며 1번이 메인 이슈다.
 3. 보도자료의 홍보성 표현, 장관 발언, 전망, 평가, 구호는 제거하고 시행·발표·수치·일정·경보·의결처럼 확인된 사실만 쓴다.
 4. 원자료 제목과 설명의 문장, 어순, 표현을 복사하거나 일부 단어만 바꿔 쓰지 않는다. 주체·행위·날짜·수치의 사실요소만 추출한 뒤 완전히 새로운 문장으로 작성한다.
 5. 직접 인용, 따옴표 인용, 사진·도표·그래픽 설명은 사용하지 않는다.
-6. 공개 콘텐츠는 제목뿐이다. 제목은 14~42자, 한 문장으로 쓰고 구체적인 주체·결과·핵심 수치를 포함한다. 마침표, 감탄문, 질문, 낚시성 표현은 쓰지 않는다.
+6. 공개 콘텐츠는 제목뿐이다. 제목은 8~42자, 한 문장으로 쓰고 구체적인 주체·결과·핵심 수치를 포함한다. 마침표, 감탄문, 질문, 낚시성 표현은 쓰지 않는다.
 7. 같은 사건의 공식 자료가 여러 개면 sourceIds에 함께 기록하고, 하나뿐이면 해당 공식 원자료 하나만 기록한다.
 8. 입력에 없는 사실·기관·식별자를 만들지 않는다.
 
 JSON만 출력한다.
-{"items":[{"category":"지정된 분야 중 하나","title":"14~42자의 새로 작성한 사실 제목","sourceIds":["입력 id"],"score":0,"reason":"선정 근거","factors":{"freshness":0,"impact":0,"safety":0,"verification":0}}]}
+{"items":[{"category":"지정된 분야 중 하나","title":"8~42자의 새로 작성한 사실 제목","sourceIds":["입력 id"],"score":0,"reason":"선정 근거","factors":{"freshness":0,"impact":0,"safety":0,"verification":0}}]}
 
 공식 자료 후보: ${JSON.stringify(articles)}`;
 
@@ -280,8 +281,8 @@ const copiesSourceExpression = (generated, sourceText) => {
 const normalizeGeneratedText = value => String(value || '').replace(/\s+/g, ' ').trim();
 function validateAnalysis(value) {
   const errors = [];
-  if (!Array.isArray(value?.items) || value.items.length < 3 || value.items.length > 8) {
-    errors.push(`결과 개수 ${Array.isArray(value?.items) ? value.items.length : 0}개(허용 3~8개)`);
+  if (!Array.isArray(value?.items) || value.items.length < 2 || value.items.length > 8) {
+    errors.push(`결과 개수 ${Array.isArray(value?.items) ? value.items.length : 0}개(허용 2~8개)`);
     return errors;
   }
   const usedDocumentIds = new Set();
@@ -297,7 +298,7 @@ function validateAnalysis(value) {
     const sourceDocuments = item.sourceIds.map(id => articleById.get(id));
     if (item.sourceIds.some(id => usedDocumentIds.has(id))) errors.push(`${item.category} 동일 공식 자료 중복 사용`);
     item.sourceIds.forEach(id => usedDocumentIds.add(id));
-    if (!item.title || item.title.length < 14 || item.title.length > 42 || /[.!?。！？]$/.test(item.title)) {
+    if (!item.title || item.title.length < 8 || item.title.length > 42 || /[.!?。！？]$/.test(item.title)) {
       errors.push(`${item.category} 제목 길이 또는 형식 오류`);
     }
     if (neutralityBlocklist.test(item.title)) errors.push(`${item.category} 감정·논평 표현 포함`);
@@ -317,7 +318,7 @@ let analysis;
 let validationErrors = [];
 let modelUsed = MODEL;
 for (let attempt = 1; attempt <= 3; attempt += 1) {
-  const correction = attempt === 1 ? '' : `\n\n이전 응답은 다음 검증에 실패했다: ${validationErrors.join(' / ')}. 원자료 표현을 반복하지 말고 사실요소만 이용해 분야 중복 없이 14~42자의 새로운 제목 3~8개를 다시 작성하라.`;
+  const correction = attempt === 1 ? '' : `\n\n이전 응답은 다음 검증에 실패했다: ${validationErrors.join(' / ')}. 원자료 표현을 반복하지 말고 사실요소만 이용해 분야 중복 없이 8~42자의 새로운 제목 2~8개를 다시 작성하라.`;
   const aiRequest = await requestAi({
     systemInstruction: { parts: [{ text: '국가·공공기관 공식 자료의 사실요소만 근거로 삼고 원자료 표현을 복제하지 않은 한국어 사실 JSON만 출력한다.' }] },
     contents: [{ role: 'user', parts: [{ text: prompt + correction }] }],
