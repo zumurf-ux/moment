@@ -10,7 +10,7 @@ const DATABASE_ID = '(default)';
 const { FIREBASE_API_KEY, FIREBASE_ADMIN_EMAIL, FIREBASE_ADMIN_PASSWORD, GEMINI_API_KEY } = process.env;
 const MODEL = process.env.AI_MODEL || 'gemini-3.1-flash-lite';
 const MODEL_CANDIDATES = [...new Set([MODEL, 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'])];
-const EDITION_VERSION = 7;
+const EDITION_VERSION = 8;
 const wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 
 for (const [name, value] of Object.entries({ FIREBASE_API_KEY, FIREBASE_ADMIN_EMAIL, FIREBASE_ADMIN_PASSWORD, GEMINI_API_KEY })) {
@@ -391,7 +391,7 @@ for (let attempt = 1; attempt <= 3; attempt += 1) {
 }
 if (validationErrors.length > 0) throw new Error(`AI 결과 검증 3회 실패: ${validationErrors.join(' / ')}`);
 
-analysis.items = analysis.items.map(item => {
+const verifiedItems = analysis.items.map(item => {
   const sourceDocuments = item.sourceIds.map(id => articleById.get(id));
   return {
     ...item,
@@ -400,7 +400,23 @@ analysis.items = analysis.items.map(item => {
     sourceLicenses: [...new Set(sourceDocuments.map(document => document.license))],
   };
 });
-analysis.items.sort((a, b) => Number(b.score || 0) - Number(a.score || 0));
+verifiedItems.sort((a, b) => Number(b.score || 0) - Number(a.score || 0));
+
+const verifiedCategories = new Set(verifiedItems.map(item => item.category));
+const missingCategories = TARGET_CATEGORIES.filter(category => !verifiedCategories.has(category));
+const placeholderItems = missingCategories.map(category => ({
+  category,
+  title: '전날 공식자료에서 선정된 주요 사실 없음',
+  sourceIds: [],
+  sourceNames: [],
+  sourceUrls: [],
+  sourceLicenses: [],
+  score: 0,
+  reason: '전날 수집·검증된 공식 자료 중 해당 분야의 주요 사실이 선정되지 않음',
+  factors: { freshness: 0, impact: 0, safety: 0, verification: 0 },
+  isPlaceholder: true,
+}));
+analysis.items = [...verifiedItems, ...placeholderItems];
 
 const editionItems = analysis.items.map((item, index) => ({
   order: index + 1,
@@ -417,6 +433,7 @@ const editionItems = analysis.items.map((item, index) => ({
   isHot: index === 0,
   selectionScore: Number(item.score || 0),
   selectionReason: item.reason,
+  isPlaceholder: item.isPlaceholder === true,
 }));
 const editionId = `daily-${publishDate}-official-v${EDITION_VERSION}`;
 const edition = {
@@ -424,13 +441,13 @@ const edition = {
   headline: `${Number(sourceDate.slice(5, 7))}월 ${Number(sourceDate.slice(8, 10))}일 핵심 이슈`,
   sourceWindowStart: `${sourceDate}T00:00:00+09:00`, sourceWindowEnd: `${sourceDate}T23:59:59+09:00`,
   items: editionItems,
-  sourceCount: new Set(analysis.items.flatMap(item => item.sourceNames)).size,
+  sourceCount: new Set(verifiedItems.flatMap(item => item.sourceNames)).size,
   reviewedAt: new Date().toISOString(),
-  reviewMode: '국가·공공기관 직접 제공 자료만 수집·전 분야 분석·원문 표현 유사도 차단·AI 사실 제목만 공개',
+  reviewMode: '국가·공공기관 직접 제공 자료만 수집·8개 전 분야 고정 표시·미선정 분야 명시·AI 사실 제목만 공개',
   politicalToneEnabled: false,
   privateMediaExcluded: true,
   selectionModel: `Gemini ${modelUsed}`,
-  selectionFactors: '국가·공공기관 공식 자료만 사용·민간 언론·포털 제외·분야별 최대 1개·제목만 공개·원자료 표현 복제 차단·최신성 25%·국민 영향도 30%·안전성 25%·검증도 20%',
+  selectionFactors: '국가·공공기관 공식 자료만 사용·민간 언론·포털 제외·8개 분야 고정 표시·미선정 분야는 사실 없음 문구·분야별 최대 1개·제목만 공개·원자료 표현 복제 차단',
 };
 
 function firestoreValue(value) {
@@ -451,7 +468,7 @@ async function setDocument(collectionName, id, data) {
 }
 
 await setDocument('editions', editionId, edition);
-await Promise.all(analysis.items.map((item, index) => setDocument('candidates', `${sourceDate}-${index + 1}`, {
+await Promise.all(verifiedItems.map((item, index) => setDocument('candidates', `${sourceDate}-${index + 1}`, {
   category: item.category, title: item.title, summary: '',
   sourceName: item.sourceNames.join(' · '), sourceNames: item.sourceNames, sourceUrls: item.sourceUrls,
   sourceUrl: item.sourceUrls[0], factDate: sourceDate.replaceAll('-', '.'), sourceDate,
@@ -463,9 +480,11 @@ await Promise.all(analysis.items.map((item, index) => setDocument('candidates', 
 await setDocument('auditLogs', `auto-publish-${publishDate}`, {
   action: 'daily.auto_published', entityType: 'editions', entityId: editionId,
   actorEmail: 'github-actions@jamsi', sourceDate, publishDate, visibleAt, model: modelUsed,
-  categoryCoverage: [...new Set(analysis.items.map(item => item.category))],
-  representativeSourceCount: new Set(analysis.items.flatMap(item => item.sourceNames)).size,
+  categoryCoverage: TARGET_CATEGORIES,
+  verifiedCategoryCoverage: [...verifiedCategories],
+  missingCategories,
+  representativeSourceCount: new Set(verifiedItems.flatMap(item => item.sourceNames)).size,
   privateMediaExcluded: true,
   createdAt: new Date().toISOString(),
 });
-console.log(`${sourceDate} 국가·공공기관 공식 자료 ${analysis.items.length}개 이슈 분석 완료 → ${visibleAt} 공개 예약`);
+console.log(`${sourceDate} 공식 사실 ${verifiedItems.length}개와 미선정 분야 ${missingCategories.length}개를 합쳐 8개 분야 발행 완료 → ${visibleAt} 공개 예약`);
