@@ -25,7 +25,7 @@ const finiteNumber = (value, label) => {
 };
 
 async function fetchIndex(index) {
-  const path = `/v8/finance/chart/${encodeURIComponent(index.symbol)}?interval=5m&range=1d`;
+  const path = `/v8/finance/chart/${encodeURIComponent(index.symbol)}?interval=1d&range=10d`;
   let lastError;
   for (const host of ['query1.finance.yahoo.com', 'query2.finance.yahoo.com']) {
     try {
@@ -37,10 +37,23 @@ async function fetchIndex(index) {
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const body = await response.json();
-      const meta = body.chart?.result?.[0]?.meta;
+      const result = body.chart?.result?.[0];
+      const meta = result?.meta;
       if (!meta) throw new Error('응답에 지수 정보가 없습니다.');
-      const value = finiteNumber(meta.regularMarketPrice, `${index.name} 현재값`);
-      const previous = finiteNumber(meta.chartPreviousClose ?? meta.previousClose, `${index.name} 전일값`);
+      const timestamps = result.timestamp || [];
+      const closes = result.indicators?.quote?.[0]?.close || [];
+      const regular = meta.currentTradingPeriod?.regular;
+      const nowSeconds = Date.now() / 1000;
+      const marketIsOpen = regular && nowSeconds >= Number(regular.start) && nowSeconds < Number(regular.end);
+      const completed = timestamps
+        .map((timestamp, position) => ({ timestamp: Number(timestamp), close: Number(closes[position]) }))
+        .filter(point => Number.isFinite(point.close))
+        .filter(point => !(marketIsOpen && point.timestamp >= Number(regular.start)));
+      if (completed.length < 2) throw new Error('확정 종가가 부족합니다.');
+      const latest = completed.at(-1);
+      const prior = completed.at(-2);
+      const value = finiteNumber(latest.close, `${index.name} 종가`);
+      const previous = finiteNumber(prior.close, `${index.name} 전일 종가`);
       const change = value - previous;
       return {
         symbol: index.symbol,
@@ -49,7 +62,7 @@ async function fetchIndex(index) {
         change: Number(change.toFixed(4)),
         changePercent: Number(((change / previous) * 100).toFixed(4)),
         currency: String(meta.currency || ''),
-        marketTime: meta.regularMarketTime ? new Date(Number(meta.regularMarketTime) * 1000).toISOString() : '',
+        marketTime: new Date(latest.timestamp * 1000).toISOString(),
       };
     } catch (error) {
       lastError = error;
@@ -81,10 +94,15 @@ const toValue = value => {
 };
 
 const updatedAt = new Date().toISOString();
+const basisDate = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit',
+}).format(new Date());
 const fields = {
   updatedAt: toValue(updatedAt),
+  basisDate: toValue(basisDate),
   delayed: toValue(true),
   source: toValue('Yahoo Finance 지수 데이터'),
+  basis: toValue('CLOSE'),
   quotes: toValue(quotes),
 };
 const publishResponse = await fetch(

@@ -138,6 +138,7 @@ class FirebaseIssueRepository(
                     )
                 },
                 updatedAt = snapshot.getString("updatedAt").orEmpty(),
+                basisDate = snapshot.getString("basisDate").orEmpty(),
                 delayed = snapshot.getBoolean("delayed") ?: true,
             )
         }.onSuccess { markets.value = it }

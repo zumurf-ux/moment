@@ -5,26 +5,10 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#ffffff">
   <title>잠시</title>
-  <link rel="stylesheet" href="./styles.css?v=24">
+  <link rel="stylesheet" href="./styles.css?v=25">
 </head>
 <body class="reader-body">
   <main class="user-preview">
-    <section class="market-board" aria-labelledby="marketTitle">
-      <div class="market-heading">
-        <div>
-          <span class="market-kicker">주식</span>
-          <strong id="marketTitle">지금 시세</strong>
-        </div>
-        <span id="marketUpdatedAt" class="market-updated">시세 준비 중</span>
-      </div>
-      <div class="market-marquee" aria-label="주요 지수 움직이는 시세판">
-        <div id="marketTrack" class="market-track">
-          <span class="market-ticker-item">주요 지수를 불러오는 중입니다</span>
-        </div>
-      </div>
-      <div id="marketGrid" class="market-grid" aria-live="polite"></div>
-      <p class="market-note">시세는 지연될 수 있습니다.</p>
-    </section>
     <header class="reader-brand" aria-label="잠시">
       <img src="./app-icon.png?v=4" alt="" width="68" height="68">
       <div class="reader-brand-copy">
@@ -34,6 +18,16 @@
     </header>
     <p id="editionDateLine" class="eyebrow">잠시 · 일간</p>
     <h1 id="userHeadline">잠시</h1>
+    <section class="market-board" aria-labelledby="marketTitle">
+      <div class="market-heading">
+        <div>
+          <span class="market-kicker">주식</span>
+          <strong id="marketTitle">지금 시세</strong>
+        </div>
+      </div>
+      <div id="marketGrid" class="market-grid" aria-live="polite"></div>
+      <p id="marketNote" class="market-note">종가 기준일 확인 중</p>
+    </section>
     <div id="userIssues"></div>
     <footer class="reader-footer">© 2026 디자인하는삼촌 / 버전 1.0.00</footer>
   </main>
@@ -65,11 +59,6 @@
     function renderMarkets(snapshot) {
       const quotes = Array.isArray(snapshot?.quotes) ? snapshot.quotes : [];
       if (!quotes.length) return;
-      const ticker = quotes.map(quote => {
-        const direction = marketDirection(quote.change);
-        return `<span class="market-ticker-item"><b>${escapeHtml(quote.name)}</b><strong>${numberFormat.format(Number(quote.value))}</strong><em class="${direction}">${signed(quote.changePercent)}%</em></span>`;
-      }).join('');
-      document.querySelector('#marketTrack').innerHTML = `${ticker}${ticker}`;
       document.querySelector('#marketGrid').innerHTML = quotes.map(quote => {
         const direction = marketDirection(quote.change);
         return `<article class="market-card">
@@ -78,7 +67,8 @@
           <em class="${direction}">${signed(quote.change)} · ${signed(quote.changePercent)}%</em>
         </article>`;
       }).join('');
-      document.querySelector('#marketUpdatedAt').textContent = marketTime(snapshot.updatedAt);
+      const basisDate = String(snapshot.basisDate || '').replaceAll('-', '.');
+      document.querySelector('#marketNote').textContent = `${basisDate || marketTime(snapshot.updatedAt).slice(0, 5)} 종가 기준`;
     }
 
     function render(edition) {

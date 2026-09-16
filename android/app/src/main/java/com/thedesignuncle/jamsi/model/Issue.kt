@@ -49,5 +49,6 @@ data class MarketQuote(
 data class MarketSnapshot(
     val quotes: List<MarketQuote> = emptyList(),
     val updatedAt: String = "",
+    val basisDate: String = "",
     val delayed: Boolean = true,
 )
