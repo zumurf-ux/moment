@@ -191,7 +191,7 @@ async function collectPublicFacts(source) {
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const xml = await response.text();
     if (!/<rss\b/i.test(xml)) throw new Error('RSS 형식이 아님');
-    return [...xml.matchAll(/<item(?:\s[^>]*)?>([\s\S]*?)<\/item>/gi)].slice(0, 18).map((match, index) => {
+    return [...xml.matchAll(/<item(?:\s[^>]*)?>([\s\S]*?)<\/item>/gi)].slice(0, 40).map((match, index) => {
       const item = match[1];
       const sourceName = tag(item, 'source');
       const rawTitle = tag(item, 'title');
@@ -250,11 +250,11 @@ const publicFacts = publicFactResults
   .filter((fact, index, array) => array.findIndex(other => other.title === fact.title && other.sourceName === fact.sourceName) === index)
   .reduce((result, fact) => {
     const categoryCount = result.filter(item => item.category === fact.category).length;
-    if (categoryCount < 12) result.push(fact);
+    if (categoryCount < 30) result.push(fact);
     return result;
   }, []);
 
-const PUBLIC_TOKEN_STOPWORDS = new Set(['대한', '관련', '오늘', '어제', '한국', '정부', '공개', '발표', '뉴스', '종합', '현장']);
+const PUBLIC_TOKEN_STOPWORDS = new Set(['대한', '관련', '오늘', '어제', '한국', '정부', '공개', '발표', '뉴스', '종합', '현장', 'com', 'co', 'kr', 'www']);
 const factTokens = title => new Set(String(title || '')
   .split(/[^0-9A-Za-z가-힣]+/)
   .map(token => token.trim().toLowerCase())
@@ -270,14 +270,24 @@ const publicPairHints = Object.fromEntries(TARGET_CATEGORIES.map(category => {
       const rightTokens = factTokens(right.title);
       const sharedKeywords = [...factTokens(left.title)].filter(token => rightTokens.has(token));
       if (sharedKeywords.length >= 2) {
-        pairs.push({ ids: [left.id, right.id], sources: [left.sourceName, right.sourceName], sharedKeywords });
+        pairs.push({ ids: [left.id, right.id], sources: [left.sourceName, right.sourceName], titles: [left.title, right.title], sharedKeywords });
       }
     }
   }
   pairs.sort((left, right) => right.sharedKeywords.length - left.sharedKeywords.length);
   return [category, pairs.slice(0, 10)];
 }));
-const publicFactsForPrompt = publicFacts.map(({ url, publishedAt, ...fact }) => fact);
+const publicEvidencePairs = TARGET_CATEGORIES.flatMap((category, categoryIndex) =>
+  (publicPairHints[category] || []).map((pair, pairIndex) => ({
+    id: `public-pair-${categoryIndex + 1}-${pairIndex + 1}`,
+    category,
+    ...pair,
+  })));
+const publicEvidenceById = new Map(publicEvidencePairs.map(pair => [pair.id, pair]));
+const categoriesWithoutPublicPairs = TARGET_CATEGORIES.filter(category => !publicEvidencePairs.some(pair => pair.category === category));
+if (categoriesWithoutPublicPairs.length) {
+  console.warn(`교차확인 사건쌍이 없는 분야: ${categoriesWithoutPublicPairs.join(', ')}`);
+}
 
 if (articles.length < 2) {
   console.warn(`${sourceDate} 공식 1차 자료가 ${articles.length}개뿐이므로 공개 웹 교차 검증으로 8개 분야를 보완합니다.`);
@@ -294,22 +304,20 @@ const prompt = `당신은 한국어 일간 브리핑 '잠시'의 사실 편집 A
 4. 원자료 제목과 설명의 문장, 어순, 표현을 복사하거나 일부 단어만 바꿔 쓰지 않는다. 주체·행위·날짜·수치의 사실요소만 추출한 뒤 완전히 새로운 문장으로 작성한다.
 5. 직접 인용, 따옴표 인용, 사진·도표·그래픽 설명은 사용하지 않는다.
 6. 공개 콘텐츠는 제목뿐이다. 제목은 6~36자를 목표로 한 문장을 끝까지 완성하고, 구체적인 주체·결과·핵심 수치를 포함한다. '은/는 …에 맞춰'처럼 설명을 늘이지 말고 '코스피 7,000선 돌파', '기준금리 연 3.00%로 동결'처럼 핵심 결과로 끝낸다. 마침표, 감탄문, 질문, 낚시성 표현은 쓰지 않는다.
-7. 입력된 공식 자료로 확인된 항목은 sourceIds에 해당 id를 기록하고 publicIds는 빈 배열로 둔다.
-8. 해당 분야의 적절한 공식 후보가 없을 때만 같은 분야의 공개 사실 후보를 사용한다. ${sourceDate} 안에 실제 발생·발표·마감·확정된 동일 사실을 서로 다른 확인처 2곳 이상에서 찾아 publicIds에 기록하고 sourceIds는 빈 배열로 둔다. 아래 '교차 확인 후보 쌍'을 우선 사용하며 전망·예정·소문·주장·해설은 금지한다.
+7. 입력된 공식 자료로 확인된 항목은 sourceIds에 해당 id를 기록하고 evidencePairId는 빈 문자열로 둔다.
+8. 해당 분야의 적절한 공식 후보가 없을 때만 같은 분야의 '교차확인 사건쌍' 중 하나를 사용한다. evidencePairId에 사건쌍 id 하나를 정확히 기록하고 sourceIds는 빈 배열로 둔다. 사건쌍의 두 제목에 공통인 확정 사실만 쓰며 전망·예정·소문·주장·해설은 금지한다.
 9. 스포츠는 확정 경기 결과·기록, 국제는 확정된 정부·국제기구 발표나 실제 발생 사건, 금융은 마감 지수·공표 지표처럼 날짜와 수치를 검증할 수 있는 사실을 우선한다.
 10. 기사나 공개 RSS 제목을 복사하지 않고 여러 후보에 공통인 사실요소만으로 새 제목을 만든다. 출력 객체의 8개 분야 키를 하나도 빼거나 추가하지 않는다.
 11. 입력에 없는 공식 자료 식별자를 만들지 않는다.
 
 JSON만 출력한다.
-{"categories":${JSON.stringify(Object.fromEntries(TARGET_CATEGORIES.map(category => [category, { title: '6~36자의 완결된 사실 제목', sourceIds: [], publicIds: [], score: 0, reason: '선정·검증 근거', factors: { freshness: 0, impact: 0, safety: 0, verification: 0 } }])))}}
+{"categories":${JSON.stringify(Object.fromEntries(TARGET_CATEGORIES.map(category => [category, { title: '6~36자의 완결된 사실 제목', sourceIds: [], evidencePairId: '공개 후보 사용 시 public-pair-X-Y, 공식 후보 사용 시 빈 문자열', score: 0, reason: '선정·검증 근거', factors: { freshness: 0, impact: 0, safety: 0, verification: 0 } }])))}}
 
 각 분야 값은 정책 예시와 동일한 필드를 모두 포함한다. categories 밖에 다른 필드를 만들지 않는다.
 
 공식 자료 후보: ${JSON.stringify(articles)}
 
-공개 사실 후보: ${JSON.stringify(publicFactsForPrompt)}
-
-교차 확인 후보 쌍: ${JSON.stringify(publicPairHints)}`;
+교차확인 사건쌍: ${JSON.stringify(publicEvidencePairs)}`;
 
 const allowedCategories = new Set(TARGET_CATEGORIES);
 const articleById = new Map(articles.map(article => [article.id, article]));
@@ -429,23 +437,17 @@ function validateAnalysis(value) {
     if (usedCategories.has(item.category)) errors.push(`${item.category} 분야가 중복됨`);
     usedCategories.add(item.category);
     const sourceIds = Array.isArray(item.sourceIds) ? item.sourceIds : [];
-    const publicIds = Array.isArray(item.publicIds) ? item.publicIds : [];
+    const evidencePairId = normalizeGeneratedText(item.evidencePairId);
     const usesOfficialSource = sourceIds.length > 0;
     const sourceDocuments = usesOfficialSource ? sourceIds.filter(id => articleById.has(id)).map(id => articleById.get(id)) : [];
     if (usesOfficialSource && sourceDocuments.length !== sourceIds.length) errors.push(`${item.category} 공식 자료 식별자 오류`);
     if (usesOfficialSource && sourceIds.some(id => usedDocumentIds.has(id))) errors.push(`${item.category} 동일 공식 자료 중복 사용`);
     sourceIds.forEach(id => usedDocumentIds.add(id));
-    if (usesOfficialSource && publicIds.length) errors.push(`${item.category} 공식·공개 근거를 동시에 지정함`);
-    const publicDocuments = !usesOfficialSource ? publicIds.filter(id => publicFactById.has(id)).map(id => publicFactById.get(id)) : [];
-    if (!usesOfficialSource && (publicDocuments.length < 2 || publicDocuments.length !== publicIds.length)) {
-      errors.push(`${item.category} 공개 사실 식별자 2개 이상 필요`);
-    }
-    if (!usesOfficialSource && publicDocuments.some(document => document.category !== item.category)) {
-      errors.push(`${item.category}와 공개 근거 분야가 다름`);
-    }
-    if (!usesOfficialSource && new Set(publicDocuments.map(document => document.sourceName)).size < 2) {
-      errors.push(`${item.category} 서로 다른 확인처 2곳 미만`);
-    }
+    if (usesOfficialSource && evidencePairId) errors.push(`${item.category} 공식·공개 근거를 동시에 지정함`);
+    const evidencePair = !usesOfficialSource ? publicEvidenceById.get(evidencePairId) : null;
+    if (!usesOfficialSource && !evidencePair) errors.push(`${item.category} 교차확인 사건쌍 식별자 오류`);
+    if (!usesOfficialSource && evidencePair?.category !== item.category) errors.push(`${item.category}와 사건쌍 분야가 다름`);
+    const publicDocuments = evidencePair ? evidencePair.ids.map(id => publicFactById.get(id)).filter(Boolean) : [];
     if (!item.title || item.title.length < 6 || item.title.length > 42 || /[.!?。！？]$/.test(item.title)) {
       errors.push(`${item.category} 제목 길이 또는 형식 오류`);
     }
@@ -518,13 +520,16 @@ if (validationErrors.length > 0) throw new Error(`AI 결과 검증 5회 실패: 
 
 const verifiedItems = analysis.items.map(item => {
   const sourceIds = Array.isArray(item.sourceIds) ? item.sourceIds : [];
-  const publicIds = Array.isArray(item.publicIds) ? item.publicIds : [];
+  const evidencePairId = normalizeGeneratedText(item.evidencePairId);
   const sourceDocuments = sourceIds.map(id => articleById.get(id)).filter(Boolean);
   const isPublicFactFallback = sourceDocuments.length === 0;
+  const evidencePair = isPublicFactFallback ? publicEvidenceById.get(evidencePairId) : null;
+  const publicIds = evidencePair?.ids || [];
   const publicDocuments = isPublicFactFallback ? publicIds.map(id => publicFactById.get(id)).filter(Boolean) : [];
   return {
     ...item,
     sourceIds,
+    evidencePairId,
     publicIds,
     sourceNames: isPublicFactFallback
       ? [...new Set(publicDocuments.map(document => document.sourceName))]
