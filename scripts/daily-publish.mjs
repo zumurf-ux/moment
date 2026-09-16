@@ -109,9 +109,9 @@ async function collectFeed(source) {
   };
   let xml = '';
   let lastError;
-  for (let attempt = 0; attempt < 3 && !xml; attempt += 1) {
+  for (let attempt = 0; attempt < 2 && !xml; attempt += 1) {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 30_000);
+    const timeout = setTimeout(() => controller.abort(), 15_000);
     try {
       const response = await fetch(source.url, { headers, signal: controller.signal });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -119,7 +119,7 @@ async function collectFeed(source) {
     } catch (error) {
       const cause = error?.cause?.code || error?.cause?.message || error?.message || String(error);
       lastError = new Error(`${source.name} Node 수집 실패: ${cause}`);
-      if (attempt < 2) await wait(1_500 * (2 ** attempt));
+      if (attempt < 1) await wait(1_500);
     } finally {
       clearTimeout(timeout);
     }
@@ -127,8 +127,8 @@ async function collectFeed(source) {
   if (!xml) {
     try {
       const { stdout } = await execFile('curl', [
-        '--fail', '--silent', '--show-error', '--location', '--max-time', '45',
-        '--retry', '2', '--retry-delay', '2', '--retry-all-errors',
+        '--fail', '--silent', '--show-error', '--location', '--max-time', '20',
+        '--retry', '1', '--retry-delay', '2', '--retry-all-errors',
         '--user-agent', headers['user-agent'], '--header', `Accept: ${headers.accept}`, source.url,
       ], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 });
       xml = stdout;
@@ -157,15 +157,12 @@ async function collectFeed(source) {
   });
 }
 
-// 국내 정부 누리집의 연결 제한을 피하기 위해 공식 피드를 한 번에 하나씩 수집한다.
+// 한 기관의 연결 지연이 전체 발행을 막지 않도록 공식 피드를 두 곳씩 제한 병렬 수집한다.
 const feedResults = [];
-for (const source of OFFICIAL_SOURCES) {
-  try {
-    feedResults.push({ status: 'fulfilled', value: await collectFeed(source) });
-  } catch (reason) {
-    feedResults.push({ status: 'rejected', reason });
-  }
-  await wait(500);
+for (let index = 0; index < OFFICIAL_SOURCES.length; index += 2) {
+  const batch = OFFICIAL_SOURCES.slice(index, index + 2);
+  feedResults.push(...await Promise.allSettled(batch.map(collectFeed)));
+  await wait(750);
 }
 const failedSources = feedResults
   .map((result, index) => result.status === 'rejected' ? `${OFFICIAL_SOURCES[index].name}: ${result.reason?.message || result.reason}` : null)
@@ -324,7 +321,7 @@ for (let attempt = 1; attempt <= 3; attempt += 1) {
   const aiRequest = await requestAi({
     systemInstruction: { parts: [{ text: '국가·공공기관 공식 자료의 사실요소만 근거로 삼고 원자료 표현을 복제하지 않은 한국어 사실 JSON만 출력한다.' }] },
     contents: [{ role: 'user', parts: [{ text: prompt + correction }] }],
-    generationConfig: { temperature: 0, responseMimeType: 'application/json' },
+    generationConfig: { temperature: 0, responseMimeType: 'application/json', maxOutputTokens: 4096 },
   });
   const { response: aiResponse, model } = aiRequest;
   modelUsed = model;
